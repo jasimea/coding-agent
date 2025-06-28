@@ -320,6 +320,50 @@ class AutonomousCodingCLI {
     return "Medium";
   }
 
+  async showQueueStatus(): Promise<void> {
+    console.log(chalk.blue("📊 Task Queue Status"));
+    console.log(chalk.blue("=================="));
+
+    try {
+      const queueStatus = await this.taskProcessor.getQueueStatus();
+      
+      console.log(`Queue Size: ${chalk.cyan(queueStatus.queueSize)}`);
+      console.log(`Active Repository Locks: ${chalk.yellow(queueStatus.activeRepositoryLocks)}`);
+      console.log(`Currently Processing: ${queueStatus.isProcessing ? chalk.green('Yes') : chalk.gray('No')}`);
+      
+      // Show recent tasks
+      const recentTasks = await this.taskProcessor.getAllTaskStatuses();
+      const activeTasks = recentTasks.filter(task => 
+        task.status !== 'completed' && task.status !== 'failed'
+      );
+      
+      if (activeTasks.length > 0) {
+        console.log();
+        console.log(chalk.blue("📋 Active Tasks"));
+        console.log(chalk.blue("============="));
+        
+        activeTasks.forEach(task => {
+          const statusEmoji = this.getStatusEmoji(task.status);
+          console.log(`${statusEmoji} ${task.taskId} - ${task.status}`);
+          
+          if (task.repositoryUrl) {
+            console.log(chalk.gray(`  └─ Repository: ${task.repositoryUrl}`));
+          }
+          
+          if (task.progress) {
+            console.log(chalk.gray(`  └─ Progress: ${task.progress}`));
+          }
+        });
+      }
+      
+    } catch (error) {
+      console.error(chalk.red("Error fetching queue status:"));
+      console.error(
+        chalk.red(error instanceof Error ? error.message : "Unknown error"),
+      );
+    }
+  }
+
   async listActiveTasks(): Promise<void> {
     console.log(chalk.blue("📊 Active Tasks"));
     console.log(chalk.blue("=============="));
@@ -412,6 +456,14 @@ program
   .action(async () => {
     const cli = new AutonomousCodingCLI();
     await cli.listActiveTasks();
+  });
+
+program
+  .command("queue")
+  .description("Show current task queue status")
+  .action(async () => {
+    const cli = new AutonomousCodingCLI();
+    await cli.showQueueStatus();
   });
 
 program

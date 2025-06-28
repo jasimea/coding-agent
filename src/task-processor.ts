@@ -7,6 +7,9 @@ import { taskProcessorLogger as logger } from "./logger.js";
 import { AdvancedPlanningSystem } from "./advanced-planning.js";
 import { ClaudeConfigManager } from "./claude-config-manager.js";
 import { PRPlanningService } from "./pr-planning-service.js";
+import { TaskQueueManager } from "./task-queue-manager.js";
+import { SharedRepositoryManager } from "./shared-repository-manager.js";
+import { SQLiteTaskStorage, JSONTaskStorage, TaskStorage } from "./task-storage.js";
 import {
   TaskProcessRequest,
   TaskStatus,
@@ -18,20 +21,30 @@ export class TaskProcessor {
   private planningSystem: AdvancedPlanningSystem;
   private claudeConfigManager: ClaudeConfigManager;
   private prPlanningService: PRPlanningService;
+  private queueManager: TaskQueueManager;
+  private repositoryManager: SharedRepositoryManager;
   private workspaceDir: string;
   private activeTasksDir: string;
   private baseDir: string;
-  private taskStatuses: Map<string, TaskStatus> = new Map();
+  private isProcessing: boolean = false;
+  private processingInterval: NodeJS.Timeout | null = null;
 
-  constructor(private claudeApiKey: string) {
+  constructor(private claudeApiKey: string, useRedis: boolean = true) {
     this.planningSystem = new AdvancedPlanningSystem(claudeApiKey);
     this.claudeConfigManager = new ClaudeConfigManager();
     this.prPlanningService = new PRPlanningService();
+    
     this.baseDir = path.join(os.homedir(), ".coding-agent");
     this.workspaceDir = path.join(this.baseDir, "workspace");
     this.activeTasksDir = path.join(this.baseDir, "active-tasks");
 
+    // Initialize storage and queue
+    const taskStorage = this.createTaskStorage();
+    this.queueManager = new TaskQueueManager(taskStorage, process.env.REDIS_URL);
+    this.repositoryManager = new SharedRepositoryManager(this.workspaceDir);
+
     this.initializeDirectories();
+    this.setupGracefulShutdown();
   }
 
   private async initializeDirectories(): Promise<void> {
@@ -40,41 +53,116 @@ export class TaskProcessor {
       await fs.mkdir(this.workspaceDir, { recursive: true });
       await fs.mkdir(this.activeTasksDir, { recursive: true });
       await fs.mkdir(path.join(this.baseDir, "logs"), { recursive: true });
+      await fs.mkdir(path.join(this.baseDir, "docs"), { recursive: true });
+      
+      // Initialize queue manager and repository manager
+      await this.queueManager.initialize();
+      await this.repositoryManager.initialize();
+      
+      // Start task processing loop
+      this.startTaskProcessing();
+      
+      logger.info("Task processor initialized with queue management");
     } catch (error) {
       logger.error("Error initializing directories", { error });
     }
   }
 
+  /**
+   * Create appropriate task storage based on configuration
+   */
+  private createTaskStorage(): TaskStorage {
+    const useDatabase = process.env.USE_SQLITE !== 'false';
+    
+    if (useDatabase) {
+      const dbPath = path.join(this.baseDir, "tasks.db");
+      return new SQLiteTaskStorage(dbPath);
+    } else {
+      const tasksFile = path.join(this.baseDir, "tasks.json");
+      return new JSONTaskStorage(tasksFile);
+    }
+  }
+
   public async processTask(request: TaskProcessRequest): Promise<string> {
-    const taskId = uuidv4();
-    const startTime = new Date().toISOString();
+    // Generate task ID if not provided
+    const taskId = request.taskData.taskId || uuidv4();
+    request.taskData.taskId = taskId;
 
-    // Initialize task status
-    this.taskStatuses.set(taskId, {
-      taskId,
-      status: "pending",
-      progress: "Task received, starting processing...",
-      repositoryUrl: request.repositoryUrl,
-      startTime,
-    });
-
-    logger.info("Starting task processing", {
-      taskId,
-      repositoryUrl: request.repositoryUrl,
-      webhookSource: request.webhookSource,
-    });
-
-    // Process task asynchronously
-    this.processTaskAsync(taskId, request).catch((error) => {
-      logger.error("Task processing failed", { taskId, error: error.message });
-      this.updateTaskStatus(taskId, {
-        status: "failed",
-        error: error.message,
-        endTime: new Date().toISOString(),
+    try {
+      // Enqueue the task
+      await this.queueManager.enqueueTask(request, this.getPriority(request.taskData.priority));
+      
+      logger.info("Task enqueued for processing", {
+        taskId,
+        repositoryUrl: request.repositoryUrl,
+        webhookSource: request.webhookSource,
       });
-    });
 
-    return taskId;
+      return taskId;
+    } catch (error) {
+      logger.error("Failed to enqueue task", { taskId, error: error instanceof Error ? error.message : "Unknown error" });
+      throw error;
+    }
+  }
+
+  /**
+   * Start the task processing loop
+   */
+  private startTaskProcessing(): void {
+    if (this.processingInterval) {
+      clearInterval(this.processingInterval);
+    }
+
+    // Process tasks every 5 seconds
+    this.processingInterval = setInterval(async () => {
+      if (!this.isProcessing) {
+        await this.processNextTask();
+      }
+    }, 5000);
+
+    logger.info("Task processing loop started");
+  }
+
+  /**
+   * Stop the task processing loop
+   */
+  public stopTaskProcessing(): void {
+    if (this.processingInterval) {
+      clearInterval(this.processingInterval);
+      this.processingInterval = null;
+    }
+    logger.info("Task processing loop stopped");
+  }
+
+  /**
+   * Process the next task in the queue
+   */
+  private async processNextTask(): Promise<void> {
+    if (this.isProcessing) return;
+
+    try {
+      this.isProcessing = true;
+      
+      const queuedTask = await this.queueManager.dequeueTask();
+      if (!queuedTask) {
+        return; // No tasks in queue
+      }
+
+      logger.info("Processing task from queue", { 
+        taskId: queuedTask.taskId, 
+        repositoryUrl: queuedTask.repositoryUrl 
+      });
+
+      await this.processTaskAsync(queuedTask.taskId, queuedTask.request);
+
+    } catch (error) {
+      logger.error("Error processing next task", { 
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined
+      });
+    } finally {
+      this.isProcessing = false;
+    }
   }
 
   private async processTaskAsync(
@@ -82,15 +170,15 @@ export class TaskProcessor {
     request: TaskProcessRequest,
   ): Promise<void> {
     try {
-      // Step 1: Clone repository
+      // Step 1: Get repository from shared manager
       this.updateTaskStatus(taskId, {
         status: "planning",
-        progress: "Cloning repository...",
+        progress: "Acquiring repository workspace...",
       });
 
-      const repoConfig = await this.cloneRepository(
-        taskId,
+      const repoConfig = await this.repositoryManager.getRepository(
         request.repositoryUrl,
+        taskId
       );
       const git = simpleGit(repoConfig.clonePath);
 
@@ -236,7 +324,7 @@ export class TaskProcessor {
           );
         }
 
-        // Step 13: Complete task
+        // Step 13: Complete task and release repository lock
         this.updateTaskStatus(taskId, {
           status: "completed",
           progress:
@@ -251,53 +339,29 @@ export class TaskProcessor {
           pullRequestUrl,
           planningCommentId: commentId,
         });
+
+        // Release repository lock
+        await this.queueManager.releaseRepositoryLock(request.repositoryUrl, taskId);
       } else {
         throw new Error("Failed to extract PR number from URL");
       }
     } catch (error) {
+      logger.error("Task processing failed", { 
+        taskId, 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
+      
+      this.updateTaskStatus(taskId, {
+        status: "failed",
+        error: error instanceof Error ? error.message : "Unknown error",
+        endTime: new Date().toISOString(),
+      });
+
+      // Release repository lock on failure
+      await this.queueManager.releaseRepositoryLock(request.repositoryUrl, taskId);
+      
       throw error;
     }
-  }
-
-  private async cloneRepository(
-    taskId: string,
-    repositoryUrl: string,
-  ): Promise<RepositoryConfig> {
-    const repoName = this.extractRepoName(repositoryUrl);
-    const clonePath = path.join(this.workspaceDir, taskId, repoName);
-
-    // Ensure parent directory exists
-    await fs.mkdir(path.dirname(clonePath), { recursive: true });
-
-    // Clone repository
-    const git = simpleGit();
-
-    // Use token if available for private repositories
-    const token = process.env.GITHUB_TOKEN || process.env.GITLAB_TOKEN;
-    let authUrl = repositoryUrl;
-
-    if (token && repositoryUrl.includes("github.com")) {
-      authUrl = repositoryUrl.replace(
-        "https://github.com/",
-        `https://${token}@github.com/`,
-      );
-    } else if (token && repositoryUrl.includes("gitlab.com")) {
-      authUrl = repositoryUrl.replace(
-        "https://gitlab.com/",
-        `https://oauth2:${token}@gitlab.com/`,
-      );
-    }
-
-    await git.clone(authUrl, clonePath);
-
-    logger.info("Repository cloned successfully", { taskId, clonePath });
-
-    return {
-      url: repositoryUrl,
-      branch: "main", // Default branch, could be detected
-      token,
-      clonePath,
-    };
   }
 
   private async analyzeRepository(repoPath: string): Promise<RepoContext> {
@@ -418,13 +482,16 @@ export class TaskProcessor {
     taskId: string,
     planResult: PlanResult,
   ): Promise<void> {
+    // Save to active tasks directory for processing reference
     const planPath = path.join(this.activeTasksDir, `${taskId}-plan.json`);
     await fs.writeFile(planPath, JSON.stringify(planResult, null, 2));
 
-    const planMdPath = path.join(this.activeTasksDir, `${taskId}-plan.md`);
+    // Save markdown plan to docs folder as requested
+    const docsDir = path.join(this.baseDir, "docs");
+    const planMdPath = path.join(docsDir, `task-${taskId}-plan.md`);
     await fs.writeFile(planMdPath, planResult.fullPlan);
 
-    logger.info("Plan saved", { taskId, planPath });
+    logger.info("Plan saved", { taskId, planPath, planMdPath });
   }
 
   private async createFeatureBranch(
@@ -790,17 +857,100 @@ This repository has been configured with:
   }
 
   private updateTaskStatus(taskId: string, updates: Partial<TaskStatus>): void {
-    const currentStatus = this.taskStatuses.get(taskId);
-    if (currentStatus) {
-      this.taskStatuses.set(taskId, { ...currentStatus, ...updates });
-    }
+    // Update task status in the queue manager (which will persist to storage)
+    this.queueManager.updateTaskStatus(taskId, updates).catch((error) => {
+      logger.error("Failed to update task status", { taskId, error });
+    });
   }
 
   public async getTaskStatus(taskId: string): Promise<TaskStatus | null> {
-    return this.taskStatuses.get(taskId) || null;
+    return await this.queueManager.getTaskStatus(taskId);
   }
 
   public async getAllTaskStatuses(): Promise<TaskStatus[]> {
-    return Array.from(this.taskStatuses.values());
+    return await this.queueManager.getAllTasks();
+  }
+
+  /**
+   * Get priority number from priority string
+   */
+  private getPriority(priority: string): number {
+    switch (priority?.toLowerCase()) {
+      case 'critical':
+      case 'urgent':
+        return 5;
+      case 'high':
+        return 4;
+      case 'medium':
+        return 3;
+      case 'low':
+        return 2;
+      default:
+        return 1;
+    }
+  }
+
+  /**
+   * Get queue status for monitoring
+   */
+  async getQueueStatus(): Promise<{
+    queueSize: number;
+    activeRepositoryLocks: number;
+    isProcessing: boolean;
+  }> {
+    const queueSize = await this.queueManager.getQueueSize();
+    const locks = await this.queueManager.getActiveRepositoryLocks();
+    
+    return {
+      queueSize,
+      activeRepositoryLocks: locks.length,
+      isProcessing: this.isProcessing,
+    };
+  }
+
+  /**
+   * Clean up resources
+   */
+  async cleanup(): Promise<void> {
+    logger.info("Starting task processor cleanup...");
+    
+    this.stopTaskProcessing();
+    
+    try {
+      await this.queueManager.close();
+      await this.repositoryManager.cleanupOldRepositories();
+      logger.info("Task processor cleanup completed");
+    } catch (error) {
+      logger.error("Error during cleanup", { error });
+    }
+  }
+
+  /**
+   * Setup graceful shutdown handlers
+   */
+  private setupGracefulShutdown(): void {
+    const signals = ['SIGTERM', 'SIGINT', 'SIGUSR2'];
+    
+    signals.forEach(signal => {
+      process.on(signal, async () => {
+        logger.info(`Received ${signal}, starting graceful shutdown...`);
+        await this.cleanup();
+        process.exit(0);
+      });
+    });
+
+    // Handle uncaught exceptions
+    process.on('uncaughtException', async (error) => {
+      logger.error('Uncaught exception', { error });
+      await this.cleanup();
+      process.exit(1);
+    });
+
+    // Handle unhandled promise rejections
+    process.on('unhandledRejection', async (reason) => {
+      logger.error('Unhandled promise rejection', { reason });
+      await this.cleanup();
+      process.exit(1);
+    });
   }
 }
