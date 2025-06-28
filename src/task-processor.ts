@@ -1,17 +1,18 @@
 import { promises as fs } from "fs";
 import path from "path";
+import os from "os";
 import { v4 as uuidv4 } from "uuid";
 import simpleGit, { SimpleGit } from "simple-git";
-import { taskProcessorLogger as logger } from "./logger";
-import { AdvancedPlanningSystem } from "./advanced-planning";
-import { ClaudeConfigManager } from "./claude-config-manager";
-import { PRPlanningService } from "./pr-planning-service";
+import { taskProcessorLogger as logger } from "./logger.js";
+import { AdvancedPlanningSystem } from "./advanced-planning.js";
+import { ClaudeConfigManager } from "./claude-config-manager.js";
+import { PRPlanningService } from "./pr-planning-service.js";
 import {
   TaskProcessRequest,
   TaskStatus,
   RepositoryConfig,
-} from "./webhook-types";
-import { TaskInfo, RepoContext, PlanResult } from "./types";
+} from "./webhook-types.js";
+import { TaskInfo, RepoContext, PlanResult } from "./types.js";
 
 export class TaskProcessor {
   private planningSystem: AdvancedPlanningSystem;
@@ -19,23 +20,26 @@ export class TaskProcessor {
   private prPlanningService: PRPlanningService;
   private workspaceDir: string;
   private activeTasksDir: string;
+  private baseDir: string;
   private taskStatuses: Map<string, TaskStatus> = new Map();
 
   constructor(private claudeApiKey: string) {
     this.planningSystem = new AdvancedPlanningSystem(claudeApiKey);
     this.claudeConfigManager = new ClaudeConfigManager();
     this.prPlanningService = new PRPlanningService();
-    this.workspaceDir = path.join(process.cwd(), "workspace");
-    this.activeTasksDir = path.join(process.cwd(), "active-tasks");
+    this.baseDir = path.join(os.homedir(), ".coding-agent");
+    this.workspaceDir = path.join(this.baseDir, "workspace");
+    this.activeTasksDir = path.join(this.baseDir, "active-tasks");
 
     this.initializeDirectories();
   }
 
   private async initializeDirectories(): Promise<void> {
     try {
+      await fs.mkdir(this.baseDir, { recursive: true });
       await fs.mkdir(this.workspaceDir, { recursive: true });
       await fs.mkdir(this.activeTasksDir, { recursive: true });
-      await fs.mkdir("logs", { recursive: true });
+      await fs.mkdir(path.join(this.baseDir, "logs"), { recursive: true });
     } catch (error) {
       logger.error("Error initializing directories", { error });
     }

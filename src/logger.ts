@@ -1,12 +1,16 @@
 import winston from 'winston';
 import path from 'path';
+import os from 'os';
 
 // Ensure logs directory exists
 import { promises as fs } from 'fs';
 
+const baseDir = path.join(os.homedir(), ".coding-agent");
+const logsDir = path.join(baseDir, "logs");
+
 const initializeLogsDirectory = async () => {
   try {
-    await fs.mkdir('logs', { recursive: true });
+    await fs.mkdir(logsDir, { recursive: true });
   } catch (error) {
     console.error('Failed to create logs directory:', error);
   }
@@ -29,13 +33,13 @@ const createLogger = (service: string) => {
     transports: [
       // File transport for all logs
       new winston.transports.File({ 
-        filename: path.join('logs', 'application.log'),
+        filename: path.join(logsDir, 'application.log'),
         maxsize: 10 * 1024 * 1024, // 10MB
         maxFiles: 5
       }),
       // Service-specific file transport
       new winston.transports.File({ 
-        filename: path.join('logs', `${service}.log`),
+        filename: path.join(logsDir, `${service}.log`),
         maxsize: 5 * 1024 * 1024, // 5MB
         maxFiles: 3
       }),

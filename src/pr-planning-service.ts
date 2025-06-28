@@ -1,5 +1,5 @@
-import { prPlanningLogger as logger } from "./logger";
-import { PlanResult } from "./types";
+import { prPlanningLogger as logger } from "./logger.js";
+import { PlanResult } from "./types.js";
 
 export interface PRPlanningComment {
   body: string;
