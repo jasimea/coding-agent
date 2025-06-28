@@ -6,6 +6,7 @@ import { Config } from '../config/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs-extra';
+import { simpleGit, SimpleGit } from 'simple-git';
 
 const logger = createContextLogger('CodingAgent');
 
@@ -35,12 +36,34 @@ export class CodingAgent {
     };
   }
 
-  private getSystemPrompt(): string {
+  private async getSystemPrompt(): Promise<string> {
+    // Get current project analysis for context
+    let projectContext = '';
+    try {
+      const analysis = await this.analyzeProject();
+      projectContext = `
+
+CURRENT PROJECT CONTEXT:
+- Project Path: ${analysis.projectPath}
+- Languages Detected: ${analysis.languages.join(', ') || 'None detected'}
+- Is Git Repository: ${analysis.gitInfo ? 'Yes' : 'No'}
+- Package Manager: ${analysis.packageInfo?.name ? `${analysis.packageInfo.name} (${analysis.packageInfo.version})` : 'None detected'}
+- Dependencies: ${analysis.packageInfo?.dependencies ? Object.keys(analysis.packageInfo.dependencies).slice(0, 5).join(', ') + (Object.keys(analysis.packageInfo.dependencies).length > 5 ? '...' : '') : 'None'}
+- File Structure: ${analysis.projectStructure.slice(0, 10).map((f: any) => `${f.name} (${f.type})`).join(', ')}${analysis.projectStructure.length > 10 ? '...' : ''}`;
+    } catch (error) {
+      projectContext = `
+
+CURRENT PROJECT CONTEXT:
+- Project Path: ${this.context.projectPath}
+- Context analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    }
+
     return `You are an autonomous coding agent with advanced capabilities to help with software development tasks.
 
 Your capabilities include:
 - Reading, writing, and managing files and directories
 - Git operations (status, add, commit, push, pull, branch management, etc.)
+- GitHub operations (create pull requests, issues, repository management)
 - Executing system commands and scripts
 - Installing packages and building projects
 - Running tests and development tools
@@ -54,11 +77,12 @@ Guidelines:
 6. Always verify your actions and check for potential issues
 7. Be security-conscious and avoid dangerous operations
 8. Break down complex tasks into smaller, manageable steps
+9. Before making changes, understand the current project structure and context
+10. Use existing patterns and conventions found in the project
 
-Current working directory: ${this.context.workingDirectory}
-Project path: ${this.context.projectPath}
+Current working directory: ${this.context.workingDirectory}${projectContext}
 
-Remember to use the available tools to interact with the file system, git, and execute commands. Always provide detailed responses about what you've accomplished.`;
+IMPORTANT: Always examine the project structure first using file operations tools before making changes. Understand the existing codebase patterns, dependencies, and architecture. Use the available tools to interact with the file system, git, and execute commands. Always provide detailed responses about what you've accomplished.`;
   }
 
   private getPlanningPrompt(task: string): string {
@@ -311,9 +335,10 @@ Focus only on completing this step. Use the appropriate tools to accomplish the 
         ];
 
         // Execute this step with tools
+        const systemPrompt = await this.getSystemPrompt();
         const stepResult = await this.aiProvider.generateText(
           messages,
-          this.getSystemPrompt(),
+          systemPrompt,
           true
         );
 
@@ -508,9 +533,10 @@ At the end, if Git workflow was set up, make sure to commit your changes and the
       ];
 
       // Generate streaming response with tools
+      const systemPrompt = await this.getSystemPrompt();
       const result = await this.aiProvider.generateStream(
         messages,
-        this.getSystemPrompt(),
+        systemPrompt,
         true
       );
 
@@ -855,8 +881,7 @@ At the end, if Git workflow was set up, make sure to commit your changes and the
     }
   }
 
-  private getGitInstance(): any {
-    const { simpleGit } = require('simple-git');
+  private getGitInstance(): SimpleGit {
     return simpleGit(this.context.projectPath, {
       timeout: {
         block: Config.git.timeoutMs,
