@@ -74,8 +74,18 @@ Create a plan by breaking down the task into specific, actionable steps. Each st
 
 Available tools:
 - File operations (read, write, create, delete files and directories)
-- Git operations (status, add, commit, push, pull, branch management)
+- Git operations (status, add, commit, push, pull, branch management, remote operations)
+- GitHub operations (create pull requests, issues, get repository info)
 - Command execution (run shell commands, install packages, build projects)
+
+IMPORTANT: The plan should follow this Git workflow:
+1. Get current git status and check if it's a git repository
+2. Get git remote information to determine repository details
+3. Create a new feature branch for the task
+4. Perform the actual work (coding, file operations, etc.)
+5. Add and commit changes with a descriptive commit message
+6. Push the branch to remote
+7. Create a pull request with proper title and description
 
 Current context:
 - Working directory: ${this.context.workingDirectory}
@@ -87,17 +97,21 @@ Return a JSON object with this structure:
     {
       "id": "step_1",
       "description": "Description of what to do",
-      "action": "file_operation|git_operation|command_execution|analysis",
+      "action": "git_setup|file_operation|git_operation|github_operation|command_execution|analysis",
       "complexity": "low|medium|high",
       "estimatedDuration": "Duration in minutes"
     }
   ],
   "summary": "Brief summary of the overall plan",
   "estimatedTotalTime": "Total estimated time",
-  "dependencies": ["List of external dependencies if any"]
+  "dependencies": ["List of external dependencies if any"],
+  "branchName": "Suggested branch name for the feature",
+  "commitMessage": "Suggested commit message for the changes",
+  "prTitle": "Suggested pull request title",
+  "prDescription": "Suggested pull request description"
 }
 
-Focus on creating a practical, executable plan that uses the available tools effectively.`;
+Focus on creating a practical, executable plan that uses the available tools effectively and follows proper Git workflow.`;
   }
 
   private async createPlan(task: string): Promise<AgentPlan> {
@@ -143,7 +157,11 @@ Focus on creating a practical, executable plan that uses the available tools eff
           ],
           summary: 'Execute the given task',
           estimatedTotalTime: '5 minutes',
-          dependencies: []
+          dependencies: [],
+          branchName: `task-${Date.now()}`,
+          commitMessage: `Complete task: ${task.substring(0, 50)}`,
+          prTitle: `Task: ${task.substring(0, 50)}`,
+          prDescription: `This PR implements the following task:\n\n${task}`
         };
       }
 
@@ -154,6 +172,10 @@ Focus on creating a practical, executable plan that uses the available tools eff
         summary: planData.summary || 'Plan execution',
         estimatedTotalTime: planData.estimatedTotalTime || 'Unknown',
         dependencies: planData.dependencies || [],
+        branchName: planData.branchName,
+        commitMessage: planData.commitMessage,
+        prTitle: planData.prTitle,
+        prDescription: planData.prDescription,
         createdAt: new Date(),
         status: 'pending'
       };
@@ -185,6 +207,10 @@ Focus on creating a practical, executable plan that uses the available tools eff
         summary: 'Execute the given task (fallback plan)',
         estimatedTotalTime: '5 minutes',
         dependencies: [],
+        branchName: `task-${Date.now()}`,
+        commitMessage: `Complete task: ${task.substring(0, 50)}`,
+        prTitle: `Task: ${task.substring(0, 50)}`,
+        prDescription: `This PR implements the following task:\n\n${task}`,
         createdAt: new Date(),
         status: 'pending'
       };
@@ -223,13 +249,36 @@ Focus on creating a practical, executable plan that uses the available tools eff
       const plan = await this.createPlan(request.task);
       task.plan = plan;
 
-      logger.info('Plan created, executing steps', {
+      logger.info('Plan created, setting up Git workflow', {
         taskId,
         planId: plan.id,
         stepsCount: plan.steps.length
       });
 
-      // Step 2: Execute the plan step by step
+      // Step 2: Setup Git workflow (create branch, etc.)
+      let gitWorkflowInfo: { repoInfo: any; branchName: string } | null = null;
+      let workCompleted = false;
+
+      try {
+        gitWorkflowInfo = await this.setupGitWorkflow(plan);
+        
+        logger.info('Git workflow setup completed, executing plan steps', {
+          taskId,
+          planId: plan.id,
+          branchName: gitWorkflowInfo.branchName,
+          stepsCount: plan.steps.length
+        });
+      } catch (gitError) {
+        const gitErrorMessage = gitError instanceof Error ? gitError.message : 'Unknown git error';
+        logger.warn('Git workflow setup failed, continuing without Git workflow', {
+          taskId,
+          planId: plan.id,
+          error: gitErrorMessage
+        });
+        // Continue execution without Git workflow
+      }
+
+      // Step 3: Execute the plan step by step
       plan.status = 'executing';
       let allSteps: AgentStep[] = [];
 
@@ -299,13 +348,38 @@ Focus only on completing this step. Use the appropriate tools to accomplish the 
         };
         
         allSteps.push(summaryStep);
+
+        // Mark that some work was completed
+        workCompleted = true;
       }
 
       plan.status = 'completed';
 
+      // Step 4: Complete Git workflow (commit, push, create PR)
+      if (gitWorkflowInfo) {
+        try {
+          await this.completeGitWorkflow(plan, gitWorkflowInfo.repoInfo, gitWorkflowInfo.branchName, workCompleted);
+          
+          logger.info('Git workflow completed successfully', {
+            taskId,
+            planId: plan.id,
+            prUrl: plan.prUrl,
+            prNumber: plan.prNumber
+          });
+        } catch (gitError) {
+          const gitErrorMessage = gitError instanceof Error ? gitError.message : 'Unknown git error';
+          logger.error('Git workflow completion failed', {
+            taskId,
+            planId: plan.id,
+            error: gitErrorMessage
+          });
+          // Don't fail the entire task if Git workflow fails
+        }
+      }
+
       // Update task status
       task.status = 'completed';
-      task.result = `Plan executed successfully. ${plan.summary}`;
+      task.result = `Plan executed successfully. ${plan.summary}${plan.prUrl ? ` Pull request created: ${plan.prUrl}` : ''}`;
       task.updatedAt = new Date();
 
       const executionTime = Date.now() - startTime;
@@ -387,9 +461,26 @@ Focus only on completing this step. Use the appropriate tools to accomplish the 
       }
 
       // For streaming, we'll create a simplified approach
-      // First create a plan, then stream the execution
+      // First create a plan, then setup Git workflow, then stream the execution
       const plan = await this.createPlan(request.task);
       task.plan = plan;
+
+      // Setup Git workflow
+      let gitWorkflowInfo: { repoInfo: any; branchName: string } | null = null;
+      try {
+        gitWorkflowInfo = await this.setupGitWorkflow(plan);
+        logger.info('Git workflow setup completed for streaming execution', {
+          taskId,
+          planId: plan.id,
+          branchName: gitWorkflowInfo.branchName
+        });
+      } catch (gitError) {
+        const gitErrorMessage = gitError instanceof Error ? gitError.message : 'Unknown git error';
+        logger.warn('Git workflow setup failed for streaming execution', {
+          taskId,
+          error: gitErrorMessage
+        });
+      }
 
       // Create a comprehensive prompt that includes the plan
       const planSummary = plan.steps.map((step, index) => 
@@ -403,7 +494,11 @@ Task: ${request.task}
 Plan:
 ${planSummary}
 
-Follow the plan step by step, using appropriate tools for each step. Provide clear progress updates as you complete each step.`;
+${gitWorkflowInfo ? `Git workflow has been set up. You are now working on branch: ${gitWorkflowInfo.branchName}` : 'Git workflow could not be set up, proceeding without Git integration.'}
+
+Follow the plan step by step, using appropriate tools for each step. Provide clear progress updates as you complete each step.
+
+At the end, if Git workflow was set up, make sure to commit your changes and the system will automatically create a pull request.`;
 
       const messages: CoreMessage[] = [
         {
@@ -604,5 +699,168 @@ Follow the plan step by step, using appropriate tools for each step. Provide cle
 
   getTask(taskId: string): AgentTask | undefined {
     return this.activeTasks.get(taskId);
+  }
+
+  private async setupGitWorkflow(plan: AgentPlan): Promise<{ repoInfo: any; branchName: string }> {
+    try {
+      logger.info('Setting up Git workflow', { planId: plan.id, branchName: plan.branchName });
+
+      // Check if it's a git repository
+      const gitInfo = await this.getGitInfo();
+      if (!gitInfo?.isGitRepo) {
+        throw new Error('Current directory is not a Git repository. Please initialize a Git repository first.');
+      }
+
+      // Get git status to ensure we're starting from a clean state
+      const gitInstance = this.getGitInstance();
+      const status = await gitInstance.status();
+      
+      // If there are uncommitted changes, we need to handle them
+      if (status.files.length > 0) {
+        logger.warn('Found uncommitted changes, stashing them before creating branch', {
+          files: status.files.length
+        });
+        await gitInstance.stash(['push', '-m', `Auto-stash before task: ${plan.task}`]);
+      }
+
+      // Get remote information
+      const remotes = await gitInstance.getRemotes(true);
+      const originRemote = remotes.find((remote: any) => remote.name === 'origin');
+      
+      if (!originRemote) {
+        throw new Error('No origin remote found. Please set up a remote repository.');
+      }
+
+      // Parse repository information from remote URL
+      const { parseGitRemoteUrl } = await import('../tools/github-operations-tool.js');
+      const repoInfo = parseGitRemoteUrl(originRemote.refs.fetch);
+      
+      if (!repoInfo) {
+        throw new Error('Could not parse GitHub repository information from remote URL');
+      }
+
+      // Ensure we're on the default branch and up to date
+      const defaultBranch = Config.git.defaultBranch;
+      await gitInstance.checkout(defaultBranch);
+      await gitInstance.pull('origin', defaultBranch);
+
+      // Create and checkout the feature branch
+      const branchName = plan.branchName || `task-${Date.now()}`;
+      await gitInstance.checkoutLocalBranch(branchName);
+
+      logger.info('Git workflow setup completed', {
+        planId: plan.id,
+        branchName,
+        repoOwner: repoInfo.owner,
+        repoName: repoInfo.repo,
+        defaultBranch
+      });
+
+      return { repoInfo, branchName };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to setup Git workflow', { planId: plan.id, error: errorMessage });
+      throw new Error(`Failed to setup Git workflow: ${errorMessage}`);
+    }
+  }
+
+  private async completeGitWorkflow(
+    plan: AgentPlan, 
+    repoInfo: any, 
+    branchName: string, 
+    workCompleted: boolean
+  ): Promise<void> {
+    try {
+      if (!workCompleted) {
+        logger.info('No work completed, skipping Git workflow completion');
+        return;
+      }
+
+      logger.info('Completing Git workflow', { 
+        planId: plan.id, 
+        branchName,
+        repoOwner: repoInfo.owner,
+        repoName: repoInfo.repo
+      });
+
+      const gitInstance = this.getGitInstance();
+      
+      // Check if there are any changes to commit
+      const status = await gitInstance.status();
+      if (status.files.length === 0) {
+        logger.warn('No changes to commit, skipping Git workflow completion');
+        return;
+      }
+
+      // Add all changes
+      await gitInstance.add('.');
+      
+      // Commit with the planned commit message
+      const commitMessage = plan.commitMessage || `Complete task: ${plan.task}`;
+      await gitInstance.commit(commitMessage);
+
+      // Push the branch
+      await gitInstance.push('origin', branchName, ['--set-upstream']);
+
+      // Create a pull request if GitHub token is available
+      if (Config.github.token) {
+        try {
+          const { createPullRequestTool } = await import('../tools/github-operations-tool.js');
+          
+          const prResult = await createPullRequestTool.execute({
+            owner: repoInfo.owner,
+            repo: repoInfo.repo,
+            title: plan.prTitle || `Task: ${plan.task}`,
+            head: branchName,
+            base: Config.git.defaultBranch,
+            body: plan.prDescription || `This PR implements the following task:\n\n${plan.task}\n\n## Changes\n\n- ${plan.summary}`,
+            draft: false,
+            token: Config.github.token
+          });
+
+          logger.info('Pull request created successfully', {
+            planId: plan.id,
+            prNumber: prResult.pullRequest.number,
+            prUrl: prResult.pullRequest.url
+          });
+
+          // Store PR information in the plan
+          plan.prUrl = prResult.pullRequest.url;
+          plan.prNumber = prResult.pullRequest.number;
+        } catch (prError) {
+          const prErrorMessage = prError instanceof Error ? prError.message : 'Unknown error';
+          logger.error('Failed to create pull request', { 
+            planId: plan.id,
+            error: prErrorMessage 
+          });
+          // Don't fail the entire workflow if PR creation fails
+        }
+      } else {
+        logger.warn('GitHub token not available, skipping pull request creation');
+      }
+
+      logger.info('Git workflow completed successfully', {
+        planId: plan.id,
+        branchName,
+        commitMessage
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to complete Git workflow', { 
+        planId: plan.id, 
+        branchName,
+        error: errorMessage 
+      });
+      throw new Error(`Failed to complete Git workflow: ${errorMessage}`);
+    }
+  }
+
+  private getGitInstance(): any {
+    const { simpleGit } = require('simple-git');
+    return simpleGit(this.context.projectPath, {
+      timeout: {
+        block: Config.git.timeoutMs,
+      },
+    });
   }
 }

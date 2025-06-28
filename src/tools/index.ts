@@ -10,6 +10,11 @@ import {
   fileExistsTool,
 } from './file-operations-tool.js';
 import {
+  createPullRequestTool,
+  createIssueTool,
+  getRepositoryInfoTool,
+} from './github-operations-tool.js';
+import {
   gitStatusTool,
   gitAddTool,
   gitCommitTool,
@@ -20,6 +25,7 @@ import {
   gitDiffTool,
   gitInitTool,
   gitCloneTool,
+  gitRemoteTool,
 } from './git-operations-tool.js';
 import {
   executeCommandTool,
@@ -139,6 +145,31 @@ export const tools = {
     description: gitCloneTool.description,
     parameters: gitCloneTool.parameters,
     execute: gitCloneTool.execute,
+  }),
+
+  git_remote: tool({
+    description: gitRemoteTool.description,
+    parameters: gitRemoteTool.parameters,
+    execute: gitRemoteTool.execute,
+  }),
+
+  // GitHub Operations
+  github_create_pr: tool({
+    description: createPullRequestTool.description,
+    parameters: createPullRequestTool.parameters,
+    execute: createPullRequestTool.execute,
+  }),
+  
+  github_create_issue: tool({
+    description: createIssueTool.description,
+    parameters: createIssueTool.parameters,
+    execute: createIssueTool.execute,
+  }),
+  
+  github_get_repo_info: tool({
+    description: getRepositoryInfoTool.description,
+    parameters: getRepositoryInfoTool.parameters,
+    execute: getRepositoryInfoTool.execute,
   }),
 
   // Command Execution

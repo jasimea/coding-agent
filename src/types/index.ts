@@ -100,7 +100,7 @@ export interface AIProviderConfig {
 export interface PlanStep {
   id: string;
   description: string;
-  action: 'file_operation' | 'git_operation' | 'command_execution' | 'analysis';
+  action: 'git_setup' | 'file_operation' | 'git_operation' | 'github_operation' | 'command_execution' | 'analysis';
   complexity: 'low' | 'medium' | 'high';
   estimatedDuration: string;
 }
@@ -112,6 +112,12 @@ export interface AgentPlan {
   summary: string;
   estimatedTotalTime: string;
   dependencies: string[];
+  branchName?: string;
+  commitMessage?: string;
+  prTitle?: string;
+  prDescription?: string;
+  prUrl?: string;
+  prNumber?: number;
   createdAt: Date;
   status: 'pending' | 'executing' | 'completed' | 'failed';
 }

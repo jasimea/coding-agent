@@ -4,8 +4,10 @@ A powerful autonomous coding agent built with TypeScript, Express, and the Verce
 
 ## 🚀 Features
 
+- **Automated Git Workflow**: Every task automatically creates a feature branch, commits changes, and creates pull requests
 - **File Operations**: Read, write, create, delete, copy, move files and directories
 - **Git Operations**: Status, add, commit, push, pull, branch management, and more
+- **GitHub Integration**: Automatic pull request creation with proper titles and descriptions
 - **Command Execution**: Execute system commands and scripts safely
 - **Project Analysis**: Analyze project structure, detect languages, and provide insights
 - **Express API**: RESTful API endpoints for integration
@@ -45,6 +47,17 @@ ANTHROPIC_API_KEY=your_anthropic_api_key_here
 # For Google AI
 GOOGLE_GENERATIVE_AI_API_KEY=your_google_ai_api_key_here
 ```
+
+5. (Optional) Configure GitHub integration for automatic pull request creation:
+```bash
+# GitHub Personal Access Token with 'repo' scope
+GITHUB_TOKEN=your_github_personal_access_token
+```
+
+**Important**: For the automated Git workflow to work:
+- Your project must be a Git repository with a GitHub remote
+- The GitHub token needs `repo` scope permissions  
+- The agent will automatically create feature branches, commit changes, and create pull requests
 
 ## 🏃‍♂️ Usage
 
@@ -217,6 +230,12 @@ The agent can be configured through environment variables:
 - `git_diff`: Show differences
 - `git_init`: Initialize repository
 - `git_clone`: Clone repository
+- `git_remote`: Get remote repository information
+
+### GitHub Operations
+- `github_create_pr`: Create pull request
+- `github_create_issue`: Create issue
+- `github_get_repo_info`: Get repository information
 
 ### Command Execution
 - `execute_command`: Execute system commands
@@ -252,12 +271,21 @@ The agent can be configured through environment variables:
 "Analyze the project structure and dependencies"
 ```
 
-### Complex Tasks
+### Complex Tasks with Automated Git Workflow
 ```
 "Create a new Express route for user authentication, add it to git, and commit the changes"
 "Set up a new React component with TypeScript, add proper styling, and create tests"
 "Initialize a new git repository, create a basic README, and make the initial commit"
+"Add logging functionality to the existing API endpoints and create a pull request"
+"Implement error handling middleware and submit for code review"
 ```
+
+**Note**: With the automated Git workflow enabled:
+1. Each task automatically creates a feature branch (e.g., `task-1703567890123`)
+2. All changes are committed with descriptive messages
+3. The branch is pushed to the remote repository
+4. A pull request is automatically created with proper title and description
+5. The PR URL is returned in the task response for easy access
 
 ## 🧪 Development
 

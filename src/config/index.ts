@@ -13,6 +13,9 @@ const configSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
   
+  // GitHub Configuration
+  GITHUB_TOKEN: z.string().optional(),
+  
   // Security
   JWT_SECRET: z.string().optional(),
   RATE_LIMIT_WINDOW_MS: z.string().default('900000'),
@@ -44,6 +47,10 @@ export const Config = {
     openaiApiKey: env.OPENAI_API_KEY,
     anthropicApiKey: env.ANTHROPIC_API_KEY,
     googleApiKey: env.GOOGLE_GENERATIVE_AI_API_KEY,
+  },
+  
+  github: {
+    token: env.GITHUB_TOKEN,
   },
   
   security: {

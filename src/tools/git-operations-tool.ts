@@ -67,6 +67,12 @@ const gitCloneSchema = z.object({
   depth: z.number().optional().describe('Create a shallow clone with specified depth'),
 });
 
+const gitRemoteSchema = z.object({
+  action: z.enum(['list', 'get-url']).describe('Remote action to perform'),
+  remote: z.string().optional().default('origin').describe('Remote name (default: origin)'),
+  path: z.string().optional().describe('Repository path (default: current directory)'),
+});
+
 // Helper function to get git instance for a specific path
 function getGitInstance(repoPath?: string): SimpleGit {
   if (repoPath) {
@@ -406,6 +412,64 @@ export const gitCloneTool = {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to clone git repository', { url: parameters.url, error: errorMessage });
       throw new Error(`Failed to clone git repository: ${errorMessage}`);
+    }
+  },
+};
+
+export const gitRemoteTool = {
+  description: 'Get git remote information',
+  parameters: gitRemoteSchema,
+  execute: async (parameters: z.infer<typeof gitRemoteSchema>) => {
+    try {
+      const gitInstance = getGitInstance(parameters.path);
+      
+      switch (parameters.action) {
+        case 'list':
+          const remotes = await gitInstance.getRemotes(true);
+          logger.info('Git remotes listed', { path: parameters.path, count: remotes.length });
+          return {
+            success: true,
+            action: 'list',
+            remotes: remotes.map(remote => ({
+              name: remote.name,
+              refs: remote.refs,
+            })),
+          };
+
+        case 'get-url':
+          const remotes_list = await gitInstance.getRemotes(true);
+          const targetRemote = remotes_list.find(r => r.name === parameters.remote);
+          
+          if (!targetRemote) {
+            throw new Error(`Remote '${parameters.remote}' not found`);
+          }
+          
+          logger.info('Git remote URL retrieved', { 
+            path: parameters.path, 
+            remote: parameters.remote,
+            url: targetRemote.refs.fetch 
+          });
+          
+          return {
+            success: true,
+            action: 'get-url',
+            remote: parameters.remote,
+            url: targetRemote.refs.fetch,
+            pushUrl: targetRemote.refs.push,
+          };
+
+        default:
+          throw new Error(`Unknown remote action: ${parameters.action}`);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to perform git remote operation', { 
+        path: parameters.path, 
+        action: parameters.action, 
+        remote: parameters.remote, 
+        error: errorMessage 
+      });
+      throw new Error(`Failed to perform git remote operation: ${errorMessage}`);
     }
   },
 };
