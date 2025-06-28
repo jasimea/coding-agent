@@ -1,57 +1,64 @@
-// src/advanced-planning.ts
-// Using direct API calls to avoid TypeScript compatibility issues
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { 
-  TaskInfo, 
-  RepoContext, 
-  RepoAnalysis, 
-  PlanComponents, 
-  PlanResult
-} from './types';
+import * as path from "path";
+import { fileURLToPath } from "url";
+import {
+  TaskInfo,
+  RepoContext,
+  RepoAnalysis,
+  PlanComponents,
+  PlanResult,
+} from "./types";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export class AdvancedPlanningSystem {
   private apiKey: string;
   private templatesDir: string;
-  private model: string = 'claude-3-5-sonnet-20241022';
-  
+  private model: string = "claude-3-5-sonnet-20241022";
+
   /**
    * Helper method to generate text using the Anthropic AI SDK
    */
-  private async generateWithAI(prompt: string, maxTokens: number = 2000): Promise<string> {
+  private async generateWithAI(
+    prompt: string,
+    maxTokens: number = 2000,
+  ): Promise<string> {
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.apiKey,
-          'anthropic-version': '2023-06-01'
+          "Content-Type": "application/json",
+          "x-api-key": this.apiKey,
+          "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
           model: this.model,
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: maxTokens
-        })
+          messages: [{ role: "user", content: prompt }],
+          max_tokens: maxTokens,
+        }),
       });
-      
+
       if (!response.ok) {
         throw new Error(`API request failed with status ${response.status}`);
       }
-      
+
       const data = await response.json();
-      return data.content?.[0]?.text || '';
+      return data.content?.[0]?.text || "";
     } catch (error) {
-      console.error('Error generating text with AI:', error);
-      return 'Error generating response. Please check your API key and try again.';
+      console.error("Error generating text with AI:", error);
+      return "Error generating response. Please check your API key and try again.";
     }
   }
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
-    this.templatesDir = path.join(__dirname, 'planning-templates');
+    this.templatesDir = path.join(__dirname, "planning-templates");
   }
 
-  async generateComprehensivePlan(taskInfo: TaskInfo, repoContext: RepoContext): Promise<PlanResult> {
+  async generateComprehensivePlan(
+    taskInfo: TaskInfo,
+    repoContext: RepoContext,
+  ): Promise<PlanResult> {
     // Step 1: Analyze the repository structure
     const repoAnalysis = await this.analyzeRepository(repoContext);
 
@@ -59,13 +66,22 @@ export class AdvancedPlanningSystem {
     const initialPlan = await this.generateInitialPlan(taskInfo, repoAnalysis);
 
     // Step 3: Refine plan with technical details
-    const technicalPlan = await this.refinePlanWithTechnicalDetails(initialPlan, repoAnalysis);
+    const technicalPlan = await this.refinePlanWithTechnicalDetails(
+      initialPlan,
+      repoAnalysis,
+    );
 
     // Step 4: Add testing strategy
-    const testingStrategy = await this.generateTestingStrategy(technicalPlan, repoAnalysis);
+    const testingStrategy = await this.generateTestingStrategy(
+      technicalPlan,
+      repoAnalysis,
+    );
 
     // Step 5: Risk assessment
-    const riskAssessment = await this.generateRiskAssessment(technicalPlan, repoAnalysis);
+    const riskAssessment = await this.generateRiskAssessment(
+      technicalPlan,
+      repoAnalysis,
+    );
 
     // Step 6: Create final comprehensive plan
     return this.compileFinalPlan({
@@ -74,7 +90,7 @@ export class AdvancedPlanningSystem {
       initialPlan,
       technicalPlan,
       testingStrategy,
-      riskAssessment
+      riskAssessment,
     });
   }
 
@@ -103,11 +119,14 @@ Please provide:
 
     return {
       analysis: analysis,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
-  async generateInitialPlan(taskInfo: TaskInfo, repoAnalysis: RepoAnalysis): Promise<string> {
+  async generateInitialPlan(
+    taskInfo: TaskInfo,
+    repoAnalysis: RepoAnalysis,
+  ): Promise<string> {
     const planningPrompt = `
 Create a detailed implementation plan for this task:
 
@@ -116,8 +135,8 @@ Create a detailed implementation plan for this task:
 - Title: ${taskInfo.title}
 - Description: ${taskInfo.description}
 - Priority: ${taskInfo.priority}
-- Labels: ${taskInfo.labels?.join(', ') || 'None'}
-- Acceptance Criteria: ${taskInfo.acceptanceCriteria || 'To be defined'}
+- Labels: ${taskInfo.labels?.join(", ") || "None"}
+- Acceptance Criteria: ${taskInfo.acceptanceCriteria || "To be defined"}
 
 **Repository Context:**
 ${repoAnalysis.analysis}
@@ -165,7 +184,10 @@ Make this plan actionable and specific to the codebase.
     return await this.generateWithAI(planningPrompt, 3000);
   }
 
-  async refinePlanWithTechnicalDetails(initialPlan: string, repoAnalysis: RepoAnalysis): Promise<string> {
+  async refinePlanWithTechnicalDetails(
+    initialPlan: string,
+    repoAnalysis: RepoAnalysis,
+  ): Promise<string> {
     const refinementPrompt = `
 Refine this implementation plan with detailed technical specifications:
 
@@ -206,7 +228,10 @@ Focus on implementation details that Claude Code can directly execute.
     return await this.generateWithAI(refinementPrompt, 3000);
   }
 
-  async generateTestingStrategy(technicalPlan: string, repoAnalysis: RepoAnalysis): Promise<string> {
+  async generateTestingStrategy(
+    technicalPlan: string,
+    repoAnalysis: RepoAnalysis,
+  ): Promise<string> {
     const testingPrompt = `
 Create a comprehensive testing strategy for this implementation:
 
@@ -250,7 +275,10 @@ Include specific test files to create and their content structure.
     return await this.generateWithAI(testingPrompt, 2000);
   }
 
-  async generateRiskAssessment(technicalPlan: string, repoAnalysis: RepoAnalysis): Promise<string> {
+  async generateRiskAssessment(
+    technicalPlan: string,
+    repoAnalysis: RepoAnalysis,
+  ): Promise<string> {
     const riskPrompt = `
 Conduct a risk assessment for this implementation:
 
@@ -297,7 +325,14 @@ Rate each risk as High/Medium/Low and provide specific mitigation steps.
   }
 
   compileFinalPlan(planComponents: PlanComponents): PlanResult {
-    const { taskInfo, repoAnalysis, initialPlan, technicalPlan, testingStrategy, riskAssessment } = planComponents;
+    const {
+      taskInfo,
+      repoAnalysis,
+      initialPlan,
+      technicalPlan,
+      testingStrategy,
+      riskAssessment,
+    } = planComponents;
 
     const finalPlan = `
 # Implementation Plan: ${taskInfo.title}
@@ -314,7 +349,7 @@ Rate each risk as High/Medium/Low and provide specific mitigation steps.
 ${taskInfo.description}
 
 ### Acceptance Criteria
-${taskInfo.acceptanceCriteria || 'To be defined during implementation'}
+${taskInfo.acceptanceCriteria || "To be defined during implementation"}
 
 ---
 
@@ -390,63 +425,69 @@ ${riskAssessment}
       summary: this.generatePlanSummary(finalPlan),
       complexity: this.assessComplexity(finalPlan),
       estimatedHours: this.estimateImplementationTime(finalPlan),
-      components: planComponents
+      components: planComponents,
     };
   }
 
   generatePlanSummary(fullPlan: string): string {
     // Extract key implementation points
-    const lines = fullPlan.split('\n');
+    const lines = fullPlan.split("\n");
     const keyPoints: string[] = [];
 
-    lines.forEach(line => {
-      if (line.includes('## ') || line.includes('### ')) {
-        keyPoints.push(line.replace(/#+\s*/, '').trim());
+    lines.forEach((line) => {
+      if (line.includes("## ") || line.includes("### ")) {
+        keyPoints.push(line.replace(/#+\s*/, "").trim());
       }
     });
 
-    return keyPoints.slice(0, 5).join(' • ');
+    return keyPoints.slice(0, 5).join(" • ");
   }
 
   assessComplexity(fullPlan: string): string {
     const complexityIndicators = {
       high: [
-        'database migration', 
-        'breaking change', 
-        'architecture refactor', 
-        'security implementation', 
-        'performance optimization'
+        "database migration",
+        "breaking change",
+        "architecture refactor",
+        "security implementation",
+        "performance optimization",
       ],
       medium: [
-        'api integration', 
-        'new feature', 
-        'testing setup', 
-        'configuration change', 
-        'ui component'
+        "api integration",
+        "new feature",
+        "testing setup",
+        "configuration change",
+        "ui component",
       ],
       low: [
-        'bug fix', 
-        'documentation', 
-        'styling', 
-        'minor update', 
-        'text change'
-      ]
+        "bug fix",
+        "documentation",
+        "styling",
+        "minor update",
+        "text change",
+      ],
     };
 
     const content = fullPlan.toLowerCase();
 
-    const highScore = complexityIndicators.high.reduce((acc, indicator) => 
-      acc + (content.includes(indicator) ? 1 : 0), 0);
-      
-    const mediumScore = complexityIndicators.medium.reduce((acc, indicator) => 
-      acc + (content.includes(indicator) ? 1 : 0), 0);
-      
-    const lowScore = complexityIndicators.low.reduce((acc, indicator) => 
-      acc + (content.includes(indicator) ? 1 : 0), 0);
+    const highScore = complexityIndicators.high.reduce(
+      (acc, indicator) => acc + (content.includes(indicator) ? 1 : 0),
+      0,
+    );
 
-    if (highScore >= 2) return 'High';
-    if (mediumScore >= 2 || highScore >= 1) return 'Medium';
-    return 'Low';
+    const mediumScore = complexityIndicators.medium.reduce(
+      (acc, indicator) => acc + (content.includes(indicator) ? 1 : 0),
+      0,
+    );
+
+    const lowScore = complexityIndicators.low.reduce(
+      (acc, indicator) => acc + (content.includes(indicator) ? 1 : 0),
+      0,
+    );
+
+    if (highScore >= 2) return "High";
+    if (mediumScore >= 2 || highScore >= 1) return "Medium";
+    return "Low";
   }
 
   estimateImplementationTime(fullPlan: string): number {
@@ -454,15 +495,15 @@ ${riskAssessment}
     const complexity = this.assessComplexity(fullPlan);
     const planLength = fullPlan.length;
 
-    const baseHours: {[key: string]: number} = {
-      'High': 8,
-      'Medium': 4,
-      'Low': 2
+    const baseHours: { [key: string]: number } = {
+      High: 8,
+      Medium: 4,
+      Low: 2,
     };
 
     // Adjust based on plan detail level
     const detailMultiplier = Math.min(planLength / 5000, 2);
-    
+
     // Use a default value if complexity is not a valid key
     return Math.ceil((baseHours[complexity] || 4) * detailMultiplier);
   }

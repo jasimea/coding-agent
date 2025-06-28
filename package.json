@@ -1,17 +1,28 @@
 {
   "name": "coding-agent",
   "version": "1.0.0",
-  "description": "Autonomous coding agent with git, file operations, and command execution capabilities",
-  "main": "dist/index.js",
+  "description": "Autonomous coding agent with git, file operations, and command execution capabilities. Includes CLI tool for local testing and webhook server for production automation.",
+  "main": "dist/main.js",
   "type": "module",
+  "bin": {
+    "autonomous-coding-cli": "./dist/cli/autonomous-coding-cli.js"
+  },
   "scripts": {
-    "dev": "tsx --watch src/index.ts",
+    "dev": "tsx --watch src/main.ts",
+    "dev:server": "tsx --watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
-    "cli": "tsx src/cli/index.ts",
+    "start": "node dist/main.js",
+    "start:server": "node dist/server.js",
+    "webhook-server": "tsx src/main.ts",
+    "webhook-server:prod": "node dist/main.js",
+    "cli": "tsx src/cli/autonomous-coding-cli.ts",
+    "cli:built": "node dist/cli/autonomous-coding-cli.js",
+    "cli:test": "./test-cli.sh",
     "test": "vitest",
     "lint": "eslint src --ext .ts,.js",
-    "format": "prettier --write src"
+    "format": "prettier --write src",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm build"
   },
   "keywords": [
     "ai",
@@ -28,10 +39,13 @@
     "@ai-sdk/anthropic": "^1.2.12",
     "@ai-sdk/google": "^1.2.19",
     "@ai-sdk/openai": "^1.3.22",
+    "@anthropic-ai/sdk": "^0.55.0",
     "@octokit/rest": "^22.0.0",
     "@types/uuid": "^10.0.0",
     "ai": "^4.0.0",
+    "chalk": "^5.4.1",
     "chokidar": "^4.0.1",
+    "commander": "^14.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.1",

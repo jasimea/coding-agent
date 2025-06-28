@@ -1,379 +1,546 @@
-# Autonomous Coding Agent
+# 🤖 Autonomous Coding Agent with Webhook Integration
 
-A powerful autonomous coding agent built with TypeScript, Express, and the Vercel AI SDK. This agent can perform file operations, git operations, execute system commands, and help with various software development tasks.
+An intelligent coding agent that automatically implements code changes when JIRA issues or Trello cards are moved to development status. The agent uses Claude AI to analyze requirements, generate implementation plans, write code, and create pull requests.
 
-## 🚀 Features
+## ✨ Features
 
-- **Automated Git Workflow**: Every task automatically creates a feature branch, commits changes, and creates pull requests
-- **File Operations**: Read, write, create, delete, copy, move files and directories
-- **Git Operations**: Status, add, commit, push, pull, branch management, and more
-- **GitHub Integration**: Automatic pull request creation with proper titles and descriptions
-- **Command Execution**: Execute system commands and scripts safely
-- **Project Analysis**: Analyze project structure, detect languages, and provide insights
-- **Express API**: RESTful API endpoints for integration
-- **CLI Interface**: Interactive command-line interface
-- **Streaming Support**: Real-time streaming responses
-- **Multiple AI Providers**: Support for OpenAI, Anthropic, and Google AI
-- **Security**: Rate limiting, input validation, and path safety checks
-- **Comprehensive Logging**: Structured logging with Winston
+### Core Capabilities
+- **🎯 Advanced Planning System**: Generates comprehensive implementation plans using Claude AI
+- **📡 Webhook Integration**: Responds to JIRA and Trello status changes automatically  
+- **🔄 Git Automation**: Clones repositories, creates branches, commits changes, and creates PRs
+- **🧪 Test Strategy Generation**: Creates comprehensive testing plans and implementations
+- **⚠️ Risk Assessment**: Analyzes potential risks and provides mitigation strategies
+- **📊 Real-time Monitoring**: Track task progress and status through API endpoints
 
-## 🛠️ Installation
+### Webhook Triggers
+- **JIRA**: Issue status changes to development states (In Progress, Development, etc.)
+- **Trello**: Card moves to development lists (To Do, In Progress, Development, etc.)
 
-1. Clone the repository:
+### Supported Platforms
+- **Git**: GitHub, GitLab (with automatic PR/MR creation)
+- **Languages**: TypeScript, JavaScript, Python, Java, Go, Rust, PHP, Ruby, C++, and more
+- **Frameworks**: React, Vue, Angular, Next.js, Express, Django, Spring Boot, etc.
+
+## 🚀 Quick Start
+
+### Local Development
+
 ```bash
-git clone <repository-url>
+# Clone the repository
+git clone <your-repo-url>
 cd coding-agent
-```
 
-2. Install dependencies:
-```bash
+# Install dependencies
 pnpm install
+
+# Set up environment variables
+cp env.example .env
+# Edit .env with your API keys
+
+# Start development server
+pnpm run dev
 ```
 
-3. Set up environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your configuration
-```
+### VPS Deployment
 
-4. Configure your AI provider by setting one of these environment variables:
-```bash
-# For OpenAI
-OPENAI_API_KEY=your_openai_api_key_here
-
-# For Anthropic
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-
-# For Google AI
-GOOGLE_GENERATIVE_AI_API_KEY=your_google_ai_api_key_here
-```
-
-5. (Optional) Configure GitHub integration for automatic pull request creation:
-```bash
-# GitHub Personal Access Token with 'repo' scope
-GITHUB_TOKEN=your_github_personal_access_token
-```
-
-**Important**: For the automated Git workflow to work:
-- Your project must be a Git repository with a GitHub remote
-- The GitHub token needs `repo` scope permissions  
-- The agent will automatically create feature branches, commit changes, and create pull requests
-
-## 🏃‍♂️ Usage
-
-For detailed usage instructions, see our [**📖 Complete Usage Guide**](USAGE_GUIDE.md) which covers both API and CLI usage with examples.
-
-### Quick Start - API Server
+For production deployment on a VPS with automatic webhook processing:
 
 ```bash
-# Development mode with hot reload
-pnpm dev
+# Download and run deployment script
+curl -sSL https://raw.githubusercontent.com/your-org/coding-agent/main/deploy.sh | bash
 
-# Production mode
-pnpm build
-pnpm start
+# Or manual deployment
+git clone <your-repo-url> coding-agent
+cd coding-agent
+chmod +x deploy.sh
+./deploy.sh
 ```
 
-The server will start on `http://localhost:3000` by default.
-
-### Using the CLI
-
-```bash
-# Start interactive CLI
-pnpm cli
-```
-
-Example CLI interactions:
-```
-Agent> Create a new React component called Button
-Agent> Add all files to git and commit with message 'Initial commit'  
-Agent> List all files in the src directory
-Agent> Run npm install
-Agent> analyze
-Agent> help
-```
-
-**📖 For comprehensive usage instructions, examples, and troubleshooting, see the [Complete Usage Guide](USAGE_GUIDE.md)**
-
-### API Endpoints
-
-#### Health Check
-```bash
-GET /health
-```
-
-#### Agent Information
-```bash
-GET /agent/info
-```
-
-#### Execute Task
-```bash
-POST /agent/execute
-Content-Type: application/json
-
-{
-  "task": "Create a new file called hello.txt with content 'Hello World'",
-  "context": {
-    "workingDirectory": "/path/to/project"
-  },
-  "options": {
-    "maxExecutionTime": 30000
-  }
-}
-```
-
-#### Execute Task with Streaming
-```bash
-POST /agent/execute/stream
-Content-Type: application/json
-
-{
-  "task": "Analyze this codebase and provide suggestions"
-}
-```
-
-#### Project Analysis
-```bash
-POST /agent/analyze
-Content-Type: application/json
-
-{
-  "projectPath": "/path/to/project"
-}
-```
-
-#### Get Active Tasks
-```bash
-GET /agent/tasks
-```
-
-#### Get Specific Task
-```bash
-GET /agent/tasks/:taskId
-```
-
-#### API Documentation
-```bash
-GET /docs
-```
+See [VPS_DEPLOYMENT.md](VPS_DEPLOYMENT.md) for detailed deployment instructions.
 
 ## 🔧 Configuration
 
-The agent can be configured through environment variables:
+### Required Environment Variables
 
-### Server Configuration
-- `PORT`: Server port (default: 3000)
-- `NODE_ENV`: Environment (development, production, test)
+```env
+# Required: Anthropic API Key for Claude
+ANTHROPIC_API_KEY=sk-ant-xxxxx
 
-### AI Provider Configuration
-- `OPENAI_API_KEY`: OpenAI API key
-- `ANTHROPIC_API_KEY`: Anthropic API key
-- `GOOGLE_GENERATIVE_AI_API_KEY`: Google AI API key
+# Required: GitHub Token for creating PRs
+GITHUB_TOKEN=ghp_xxxxx
 
-### Security Configuration
-- `JWT_SECRET`: JWT secret for authentication
-- `RATE_LIMIT_WINDOW_MS`: Rate limit window in milliseconds
-- `RATE_LIMIT_MAX_REQUESTS`: Maximum requests per window
+# Optional: GitLab Token
+GITLAB_TOKEN=glpat-xxxxx
 
-### Agent Configuration
-- `MAX_EXECUTION_TIME_MS`: Maximum execution time for tasks
-- `MAX_FILE_SIZE_MB`: Maximum file size for operations
-- `ALLOWED_FILE_EXTENSIONS`: Comma-separated list of allowed file extensions
+# Optional: Webhook Security
+WEBHOOK_SECRET=your-secure-secret
 
-### Git Configuration
-- `DEFAULT_GIT_BRANCH`: Default git branch name
-- `GIT_TIMEOUT_MS`: Git operation timeout
+# Server Configuration
+PORT=3000
+NODE_ENV=production
+LOG_LEVEL=info
+```
 
-### Logging Configuration
-- `LOG_LEVEL`: Logging level (error, warn, info, debug)
-- `LOG_FILE`: Log file path
+### Repository Requirements
+
+For the agent to work with your repositories, include the repository URL in:
+
+**JIRA Issues:**
+```
+Repository: https://github.com/your-org/your-repo
+
+## Requirements
+- Implement feature X
+- Add proper error handling
+- Include unit tests
+
+## Acceptance Criteria
+- [ ] Feature works as expected
+- [ ] Tests pass
+- [ ] Documentation updated
+```
+
+**Trello Cards:**
+```
+Repository: https://github.com/your-org/your-repo
+
+Implement new user authentication system with JWT tokens
+```
+
+## 📡 API Endpoints
+
+### Webhook Endpoints
+- `POST /webhook/jira` - Receives JIRA webhooks
+- `POST /webhook/trello` - Receives Trello webhooks
+
+### Management API
+- `GET /health` - Health check
+- `GET /api/tasks/:taskId/status` - Get task processing status
+- `POST /api/tasks/trigger` - Manually trigger task processing
+
+### Example Usage
+
+```bash
+# Manual task trigger
+curl -X POST https://your-domain.com/api/tasks/trigger \
+  -H "Content-Type: application/json" \
+  -d '{
+    "repositoryUrl": "https://github.com/your-org/your-repo",
+    "taskData": {
+      "taskId": "TASK-001",
+      "title": "Add user authentication",
+      "description": "Implement JWT-based authentication system",
+      "priority": "High",
+      "acceptanceCriteria": "Users can login and logout securely"
+    }
+  }'
+
+# Check task status
+curl https://your-domain.com/api/tasks/TASK-001/status
+```
+
+## 🖥️ CLI Tool - Local Testing
+
+For local development and testing, use the built-in CLI tool to process tasks against any GitHub repository without setting up webhooks.
+
+### Installation & Setup
+
+```bash
+# Ensure environment variables are set
+cp env.example .env
+# Edit .env with ANTHROPIC_API_KEY and GITHUB_TOKEN
+
+# Build the project (required for CLI)
+pnpm build
+```
+
+### CLI Commands
+
+#### Process a Custom Task
+Process any task against a GitHub repository:
+
+```bash
+pnpm cli process \
+  --repository "https://github.com/owner/repo" \
+  --task-id "LOCAL-001" \
+  --title "Add dark mode toggle" \
+  --description "Implement a dark mode toggle button in the header that persists user preference" \
+  --priority "Medium" \
+  --criteria "Toggle works, preference saved, applies across pages"
+```
+
+#### Process a GitHub Issue
+Automatically fetch and process a GitHub issue:
+
+```bash
+pnpm cli issue \
+  --repository "https://github.com/owner/repo" \
+  --number 42
+```
+
+This command will:
+1. Fetch issue details from GitHub API
+2. Extract title, description, labels, and acceptance criteria
+3. Process the issue as a task
+4. Monitor progress in real-time
+
+#### List Active Tasks
+View all currently running tasks:
+
+```bash
+pnpm cli list
+```
+
+#### Check Task Status
+Monitor a specific task:
+
+```bash
+pnpm cli status --task-id "LOCAL-001"
+```
+
+### CLI Examples
+
+#### Example 1: Fix a Bug in a React App
+```bash
+pnpm cli process \
+  --repository "https://github.com/myorg/react-app" \
+  --task-id "BUG-001" \
+  --title "Fix login form validation" \
+  --description "The login form is not validating email format properly. It should show an error for invalid emails." \
+  --priority "High" \
+  --labels "bug,frontend"
+```
+
+#### Example 2: Add a New Feature
+```bash
+pnpm cli process \
+  --repository "https://github.com/myorg/api-server" \
+  --task-id "FEAT-001" \
+  --title "Add user profile endpoints" \
+  --description "Add CRUD endpoints for user profiles with proper authentication" \
+  --criteria "GET, POST, PUT, DELETE /api/profile endpoints with JWT auth"
+```
+
+#### Example 3: Process an Existing GitHub Issue
+```bash
+pnpm cli issue \
+  --repository "https://github.com/facebook/react" \
+  --number 1234
+```
+
+### CLI Progress Monitoring
+
+The CLI provides real-time progress updates:
+
+```
+🤖 Autonomous Coding Agent - Local Testing
+==========================================
+
+📋 Task Details:
+  Repository: https://github.com/myorg/my-app
+  Task ID: LOCAL-001
+  Title: Add dark mode toggle
+  Description: Implement a dark mode toggle...
+  Priority: Medium
+
+🚀 Starting task processing...
+✅ Task processing started with ID: uuid-12345
+
+📊 Monitoring task progress...
+Press Ctrl+C to stop monitoring
+
+⏳ [2.1s] Cloning repository...
+📋 [8.3s] Analyzing codebase and generating plan...
+📝 [12.7s] Creating feature branch: feature/LOCAL-001-add-dark-mode-toggle
+📝 [15.2s] Created pull request: #123
+📝 [16.1s] Posted detailed planning comment
+⚡ [18.5s] Starting implementation...
+⚡ [45.2s] Implementing dark mode toggle component...
+⚡ [67.8s] Adding persistence logic...
+⚡ [89.1s] Updating theme context...
+✅ [92.4s] Implementation completed!
+
+🎉 Task completed successfully!
+📖 Review the implementation: https://github.com/myorg/my-app/pull/123
+🌿 Branch created: feature/LOCAL-001-add-dark-mode-toggle
+⏱️  Total time: 92.4s
+```
+
+### CLI vs Webhook Processing
+
+| Feature | CLI | Webhook |
+|---------|-----|---------|
+| **Trigger** | Manual command | Automatic (JIRA/Trello) |
+| **Use Case** | Testing, development | Production automation |
+| **Repository** | Any GitHub repo | Must be specified in issue/card |
+| **Monitoring** | Real-time in terminal | API endpoints + logs |
+| **Task Source** | Custom or GitHub issues | JIRA issues or Trello cards |
+
+### CLI Configuration
+
+Environment variables required for CLI:
+
+```env
+# Required for code generation
+ANTHROPIC_API_KEY=sk-ant-xxxxx
+
+# Required for GitHub operations
+GITHUB_TOKEN=ghp_xxxxx
+
+# Optional: For GitLab repositories
+GITLAB_TOKEN=glpat-xxxxx
+```
+
+## 🔄 Workflow
+
+### Automatic Processing Flow
+
+1. **Webhook Trigger**: JIRA/Trello status change detected
+2. **Repository Clone**: Agent clones the specified repository
+3. **Analysis**: Analyzes codebase structure and dependencies
+4. **Planning**: Generates comprehensive implementation plan using Claude
+5. **Implementation**: Executes the plan (integrates with Claude Code API)
+6. **Branch Creation**: Creates feature branch with descriptive name
+7. **Code Changes**: Implements required changes and tests
+8. **Commit**: Commits changes with detailed commit message
+9. **Pull Request**: Creates PR with implementation details and testing notes
+
+### Manual Testing
+
+```bash
+# Test webhook endpoints
+curl -X POST http://localhost:3000/webhook/jira \
+  -H "Content-Type: application/json" \
+  -d @test-data/jira-webhook.json
+
+# Monitor processing
+docker-compose logs -f coding-agent
+```
 
 ## 🛡️ Security Features
 
-### Path Safety
-- All file operations are restricted to the project directory
-- Path traversal attacks are prevented
-- Absolute paths are resolved and validated
+- **Webhook Validation**: Cryptographic signature verification
+- **Rate Limiting**: Prevents abuse with configurable limits
+- **CORS Protection**: Restricts cross-origin requests
+- **SSL/TLS**: HTTPS-only in production
+- **Input Sanitization**: Validates all webhook payloads
+- **Token Security**: Secure storage and handling of API tokens
 
-### Command Safety
-- Dangerous commands are blocked
-- Restricted system paths are protected
-- Environment variables are sanitized
+## 📊 Monitoring & Logging
 
-### Rate Limiting
-- API endpoints are rate-limited
-- Configurable limits per IP address
-- Proper HTTP headers for rate limit information
+### Log Files
+- `logs/webhook.log` - Webhook processing logs
+- `logs/task-processor.log` - Task execution logs  
+- `logs/application.log` - General application logs
 
-### Input Validation
-- All API inputs are validated using Zod schemas
-- Proper error handling and sanitization
-- Size limits on file operations
+### Monitoring Commands
+```bash
+# Real-time logs
+docker-compose logs -f coding-agent
 
-## 🔨 Available Tools
+# Health check
+curl http://localhost:3000/health
 
-### File Operations
-- `read_file`: Read file contents
-- `write_file`: Write content to a file
-- `delete_file`: Delete files or directories
-- `list_directory`: List directory contents
-- `create_directory`: Create directories
-- `copy_file`: Copy files or directories
-- `move_file`: Move/rename files or directories
-- `file_exists`: Check if file exists
-
-### Git Operations
-- `git_status`: Get repository status
-- `git_add`: Add files to staging area
-- `git_commit`: Commit changes
-- `git_push`: Push to remote repository
-- `git_pull`: Pull from remote repository
-- `git_branch`: Branch management (list, create, switch, delete)
-- `git_log`: Show commit history
-- `git_diff`: Show differences
-- `git_init`: Initialize repository
-- `git_clone`: Clone repository
-- `git_remote`: Get remote repository information
-
-### GitHub Operations
-- `github_create_pr`: Create pull request
-- `github_create_issue`: Create issue
-- `github_get_repo_info`: Get repository information
-
-### Command Execution
-- `execute_command`: Execute system commands
-- `execute_script`: Execute scripts with interpreters
-- `npm_install`: Install npm packages
-- `build_project`: Build the project
-- `run_tests`: Run project tests
-
-## 📝 Example Tasks
-
-### File Management
-```
-"Create a new TypeScript file called utils.ts with helper functions"
-"Read the contents of package.json"
-"List all JavaScript files in the src directory"
-"Copy all files from src to backup folder"
+# Task status monitoring
+curl http://localhost:3000/api/tasks/{taskId}/status
 ```
 
-### Git Operations
-```
-"Show git status"
-"Add all changes and commit with message 'Update documentation'"
-"Create a new branch called feature/auth"
-"Push changes to origin main"
-"Show the last 5 commits"
-```
+### Metrics & Alerts
+- Response times for webhook processing
+- Success/failure rates for task completion
+- Repository clone and PR creation rates
+- Claude API usage and rate limiting
 
-### Development Tasks
-```
-"Install express and @types/express as dependencies"
-"Run the build script"
-"Execute npm test"
-"Analyze the project structure and dependencies"
-```
+## 🧪 Testing
 
-### Complex Tasks with Automated Git Workflow
-```
-"Create a new Express route for user authentication, add it to git, and commit the changes"
-"Set up a new React component with TypeScript, add proper styling, and create tests"
-"Initialize a new git repository, create a basic README, and make the initial commit"
-"Add logging functionality to the existing API endpoints and create a pull request"
-"Implement error handling middleware and submit for code review"
-```
-
-**Note**: With the automated Git workflow enabled:
-1. Each task automatically creates a feature branch (e.g., `task-1703567890123`)
-2. All changes are committed with descriptive messages
-3. The branch is pushed to the remote repository
-4. A pull request is automatically created with proper title and description
-5. The PR URL is returned in the task response for easy access
-
-## 🧪 Development
-
-### Running Tests
+### Unit Tests
 ```bash
 pnpm test
 ```
 
-### Linting
+### Integration Tests
 ```bash
-pnpm lint
+# Test webhook endpoints
+pnpm test:webhooks
+
+# Test repository operations
+pnpm test:git
+
+# Test Claude integration
+pnpm test:claude
 ```
 
-### Formatting
+### Load Testing
 ```bash
-pnpm format
+# Test webhook load handling
+curl -X POST http://localhost:3000/webhook/jira \
+  -H "Content-Type: application/json" \
+  -d @test-data/load-test-payload.json \
+  --parallel --parallel-immediate --parallel-max 10
 ```
 
-### Building
-```bash
-pnpm build
+## 🔧 Development
+
+### Project Structure
+```
+src/
+├── main.ts                 # Application entry point
+├── webhook-server.ts       # Webhook handling server
+├── task-processor.ts       # Core task processing logic
+├── advanced-planning.ts    # Claude-powered planning system
+├── webhook-types.ts        # TypeScript interfaces
+└── types.ts               # Core type definitions
+
+test/
+├── webhook.test.ts        # Webhook endpoint tests
+├── task-processor.test.ts # Task processing tests
+└── integration.test.ts    # End-to-end tests
 ```
 
-## 📖 API Documentation
+### Adding New Features
+1. **Webhook Sources**: Extend webhook-types.ts and webhook-server.ts
+2. **Git Providers**: Add support in task-processor.ts
+3. **Planning Logic**: Enhance advanced-planning.ts
+4. **Testing**: Add corresponding test files
 
-Once the server is running, visit `http://localhost:3000/docs` for complete API documentation including:
-- Available endpoints
-- Request/response schemas
-- Example requests
-- Error codes
-
-## 🤝 Contributing
-
+### Contributing
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Run linting and tests
-6. Submit a pull request
+3. Add tests for new functionality
+4. Submit a pull request
 
-## 📄 License
-
-This project is licensed under the ISC License.
-
-## 🔮 Roadmap
-
-- [ ] Web UI interface
-- [ ] Plugin system for custom tools
-- [ ] Database integration
-- [ ] Multi-language support
-- [ ] Docker containerization
-- [ ] Kubernetes deployment
-- [ ] Advanced security features
-- [ ] Performance monitoring
-- [ ] Code generation templates
-- [ ] Integration with popular IDEs
-
-## 🐛 Troubleshooting
+## 🚨 Troubleshooting
 
 ### Common Issues
 
-**API Key Not Found**
-- Make sure you've set the appropriate AI provider API key in your `.env` file
-- Verify the environment variable name matches the provider you want to use
+**Webhook not received:**
+- Check firewall and port forwarding
+- Verify webhook URL in JIRA/Trello
+- Check webhook secret configuration
 
-**Permission Denied**
-- Check file permissions in your project directory
-- Ensure the agent has read/write access to necessary files
-- Verify git repository permissions for git operations
+**Repository clone fails:**
+- Verify GitHub/GitLab token permissions
+- Check repository URL format
+- Ensure token has access to private repos
 
-**Rate Limit Exceeded**
-- Wait for the rate limit window to reset
-- Adjust rate limit configuration if needed
-- Consider implementing authentication for higher limits
+**Claude API errors:**
+- Verify API key validity
+- Check rate limits and usage
+- Monitor API response times
 
-**Command Execution Failed**
-- Verify the command exists and is accessible
-- Check working directory and environment variables
-- Review security restrictions for dangerous commands
+**PR creation fails:**
+- Check token permissions (needs repo write access)
+- Verify branch protection rules
+- Ensure proper authentication
 
 ### Debug Mode
+```bash
+# Enable debug logging
+echo "LOG_LEVEL=debug" >> .env
+docker-compose restart coding-agent
 
-Set `LOG_LEVEL=debug` in your environment to enable detailed logging for troubleshooting.
+# View detailed logs
+docker-compose logs -f coding-agent | grep DEBUG
+```
 
-## 📧 Support
+## 📚 Documentation
 
-For issues, questions, or contributions, please create an issue in the repository or contact the maintainers.
+- [VPS Deployment Guide](VPS_DEPLOYMENT.md) - Complete VPS setup instructions
+- [Webhook Configuration](docs/webhook-setup.md) - JIRA/Trello webhook setup
+- [API Reference](docs/api-reference.md) - Complete API documentation
+- [Architecture Overview](docs/architecture.md) - System design and components
+
+## 🤝 Integration Examples
+
+### GitHub Actions Integration
+```yaml
+name: Trigger Coding Agent
+on:
+  issues:
+    types: [labeled]
+jobs:
+  trigger:
+    if: contains(github.event.label.name, 'ready-for-development')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Agent
+        run: |
+          curl -X POST https://your-domain.com/api/tasks/trigger \
+            -H "Content-Type: application/json" \
+            -d @task-data.json
+```
+
+### Custom Webhook Integration
+```typescript
+// Custom webhook handler example
+app.post('/webhook/custom', async (req, res) => {
+  const { repositoryUrl, taskDescription } = req.body;
+  
+  const taskId = await taskProcessor.processTask({
+    repositoryUrl,
+    taskData: {
+      taskId: generateId(),
+      title: taskDescription,
+      description: taskDescription,
+      priority: 'Medium'
+    },
+    webhookSource: 'custom'
+  });
+  
+  res.json({ taskId });
+});
+```
+
+## 🎯 Quick Start Summary
+
+### For Local Testing (CLI)
+```bash
+# Setup
+cp env.example .env  # Add your API keys
+pnpm install && pnpm build
+
+# Test against any GitHub repo
+pnpm cli process \
+  --repository "https://github.com/owner/repo" \
+  --task-id "TEST-001" \
+  --title "Your task title" \
+  --description "Detailed task description"
+
+# Or process a GitHub issue directly
+pnpm cli issue --repository "https://github.com/owner/repo" --number 42
+```
+
+### For Production (Webhook Automation)
+```bash
+# Deploy to VPS
+git clone <repo-url> && cd coding-agent
+cp env.example .env  # Configure production settings
+./deploy.sh          # Automated deployment
+
+# Configure webhooks in JIRA/Trello to point to your server
+# Tasks will be processed automatically when moved to development
+```
+
+### Key Features Summary
+- 🎯 **Planning-First**: Every task gets comprehensive analysis before implementation
+- 🖥️ **CLI Tool**: Test locally against any GitHub repository or issue  
+- 📡 **Webhook Integration**: Automatic processing from JIRA/Trello status changes
+- 🔄 **Full Automation**: Clone → Plan → Code → Test → PR creation
+- 🧠 **Claude AI**: Advanced planning and implementation using Claude
+- 📝 **Documentation**: Detailed planning comments and progress tracking
+
+See [CLI_USAGE.md](CLI_USAGE.md) for comprehensive CLI examples and [VPS_DEPLOYMENT.md](VPS_DEPLOYMENT.md) for production deployment.
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+- **Issues**: [GitHub Issues](https://github.com/your-org/coding-agent/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-org/coding-agent/discussions)
+- **Email**: support@your-domain.com
+
+---
+
+**🤖 Built with Claude AI for autonomous software development**
