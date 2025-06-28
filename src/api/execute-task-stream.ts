@@ -18,8 +18,10 @@ function getAgentInstance(): CodingAgent {
 
 // Request validation schema
 const executeTaskSchema = z.object({
+  sessionId: z.string().optional().describe('Session ID to associate with this task'),
   task: z.string().min(1).max(10000).describe('The task description for the agent to execute'),
   context: z.object({
+    sessionId: z.string().optional(),
     workingDirectory: z.string().optional(),
     projectPath: z.string().optional(),
     environment: z.record(z.string()).optional(),
@@ -36,11 +38,26 @@ export const executeTaskStreamHandler = async (req: Request, res: Response) => {
     const validatedData = executeTaskSchema.parse(req.body);
     
     logger.info('Executing streaming agent task', {
+      sessionId: validatedData.sessionId,
       task: validatedData.task.substring(0, 100) + (validatedData.task.length > 100 ? '...' : ''),
     });
 
     const agent = getAgentInstance();
+    
+    // If sessionId is provided, switch to that session or create it
+    if (validatedData.sessionId) {
+      try {
+        agent.setSessionId(validatedData.sessionId);
+      } catch (error) {
+        // Session doesn't exist, create it
+        logger.info('Creating new session for streaming', { sessionId: validatedData.sessionId });
+        agent.createNewSession(validatedData.context?.workingDirectory || validatedData.options?.workingDirectory);
+        agent.setSessionId(validatedData.sessionId);
+      }
+    }
+
     const request: AgentRequest = {
+      sessionId: validatedData.sessionId,
       task: validatedData.task,
       context: validatedData.context,
       options: validatedData.options,

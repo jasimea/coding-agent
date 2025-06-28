@@ -1,13 +1,39 @@
 import { CodingAgent } from '../src/agents/coding-agent.js';
 import { AIProvider } from '../src/ai/provider.js';
-import { describe, it, beforeEach, expect } from 'vitest';
+import { describe, it, beforeEach, expect, vi } from 'vitest';
+import type { CoreMessage } from 'ai';
 
 describe('CodingAgent Git Workflow', () => {
   let agent: CodingAgent;
+  let mockAIProvider: AIProvider;
 
   beforeEach(() => {
-    // Initialize with a mock AI provider for testing
-    const mockAIProvider = new AIProvider();
+    // Create a mock AI provider
+    mockAIProvider = {
+      generateText: vi.fn().mockResolvedValue({
+        text: JSON.stringify({
+          steps: [
+            {
+              id: 'step_1',
+              description: 'Create hello world function',
+              action: 'create',
+              complexity: 'simple',
+              estimatedDuration: '2 minutes'
+            }
+          ],
+          summary: 'Create a simple hello world function',
+          estimatedTotalTime: '2 minutes',
+          dependencies: [],
+          branchName: 'feature/hello-world',
+          commitMessage: 'Add hello world function',
+          prTitle: 'Add hello world function',
+          prDescription: 'This PR adds a simple hello world function'
+        })
+      }),
+      generateStream: vi.fn(),
+      generateWithTools: vi.fn()
+    } as any;
+
     agent = new CodingAgent(mockAIProvider, process.cwd());
   });
 
@@ -35,6 +61,9 @@ describe('CodingAgent Git Workflow', () => {
     expect(typeof plan.commitMessage).toBe('string');
     expect(typeof plan.prTitle).toBe('string');
     expect(typeof plan.prDescription).toBe('string');
+    
+    // Verify the mock was called
+    expect(mockAIProvider.generateText).toHaveBeenCalled();
   });
 
   it('should handle project analysis', async () => {

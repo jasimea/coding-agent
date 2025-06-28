@@ -12,6 +12,14 @@ import { analyzeProjectHandler } from './api/analyze-project.js';
 import { getTasksHandler } from './api/get-tasks.js';
 import { getTaskHandler } from './api/get-task.js';
 import { docsHandler } from './api/docs.js';
+import { 
+  createSessionHandler,
+  getSessionHandler,
+  listSessionsHandler,
+  endSessionHandler,
+  getCurrentSessionHandler,
+  switchSessionHandler
+} from './api/sessions.js';
 
 const logger = createContextLogger('Server');
 
@@ -102,6 +110,14 @@ export class Server {
     this.app.post('/agent/analyze', analyzeProjectHandler);
     this.app.get('/agent/tasks', getTasksHandler);
     this.app.get('/agent/tasks/:taskId', getTaskHandler);
+
+    // Session management endpoints
+    this.app.post('/sessions', createSessionHandler);
+    this.app.get('/sessions', listSessionsHandler);
+    this.app.get('/sessions/current', getCurrentSessionHandler);
+    this.app.get('/sessions/:sessionId', getSessionHandler);
+    this.app.post('/sessions/:sessionId/switch', switchSessionHandler);
+    this.app.post('/sessions/:sessionId/end', endSessionHandler);
 
     // Documentation
     this.app.get('/docs', docsHandler);

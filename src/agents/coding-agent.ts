@@ -1,6 +1,7 @@
 import { CoreMessage } from 'ai';
 import { AIProvider } from '../ai/provider.js';
 import { createContextLogger } from '../utils/logger.js';
+import { getSessionManager } from '../utils/session-manager.js';
 import { AgentTask, AgentContext, AgentRequest, AgentResponse, AgentStep, AgentPlan } from '../types/index.js';
 import { Config } from '../config/index.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,21 +15,25 @@ export class CodingAgent {
   private aiProvider: AIProvider;
   private context: AgentContext;
   private activeTasks: Map<string, AgentTask> = new Map();
+  private sessionManager = getSessionManager();
 
-  constructor(aiProvider?: AIProvider, workingDirectory?: string) {
+  constructor(aiProvider?: AIProvider, workingDirectory?: string, sessionId?: string) {
     this.aiProvider = aiProvider || new AIProvider();
-    this.context = this.initializeContext(workingDirectory);
+    this.context = this.initializeContext(workingDirectory, sessionId);
     
     logger.info('Coding Agent initialized', {
+      sessionId: this.context.sessionId,
       workingDirectory: this.context.workingDirectory,
       projectPath: this.context.projectPath,
     });
   }
 
-  private initializeContext(workingDirectory?: string): AgentContext {
+  private initializeContext(workingDirectory?: string, sessionId?: string): AgentContext {
     const workDir = workingDirectory || process.cwd();
+    const finalSessionId = sessionId || this.sessionManager.createSession(workDir);
     
     return {
+      sessionId: finalSessionId,
       workingDirectory: workDir,
       projectPath: workDir,
       files: [],
@@ -191,6 +196,7 @@ Focus on creating a practical, executable plan that uses the available tools eff
 
       const plan: AgentPlan = {
         id: uuidv4(),
+        sessionId: this.context.sessionId,
         task,
         steps: planData.steps || [],
         summary: planData.summary || 'Plan execution',
@@ -218,6 +224,7 @@ Focus on creating a practical, executable plan that uses the available tools eff
       // Return a fallback plan
       return {
         id: uuidv4(),
+        sessionId: this.context.sessionId,
         task,
         steps: [
           {
@@ -246,8 +253,12 @@ Focus on creating a practical, executable plan that uses the available tools eff
     const startTime = Date.now();
     const steps: AgentStep[] = [];
 
+    // Use provided sessionId or create a new one
+    const sessionId = request.sessionId || this.context.sessionId;
+
     const task: AgentTask = {
       id: taskId,
+      sessionId,
       type: this.categorizeTask(request.task),
       description: request.task,
       status: 'running',
@@ -257,9 +268,13 @@ Focus on creating a practical, executable plan that uses the available tools eff
 
     this.activeTasks.set(taskId, task);
 
+    // Update session metadata
+    this.sessionManager.addTaskToSession(sessionId, taskId);
+
     try {
       logger.info('Starting task execution with planning', {
         taskId,
+        sessionId,
         type: task.type,
         description: request.task,
       });
@@ -409,14 +424,20 @@ Focus only on completing this step. Use the appropriate tools to accomplish the 
 
       const executionTime = Date.now() - startTime;
 
+      // Update session metadata with task completion
+      this.sessionManager.markTaskCompleted(sessionId, executionTime);
+      this.sessionManager.addPlanToSession(sessionId, plan.id);
+
       logger.info('Task execution with planning completed', {
         taskId,
+        sessionId,
         planId: plan.id,
         executionTime,
         totalSteps: allSteps.length,
       });
 
       const response: AgentResponse = {
+        sessionId,
         taskId,
         status: 'completed',
         result: task.result || '',
@@ -439,18 +460,25 @@ Focus only on completing this step. Use the appropriate tools to accomplish the 
         task.plan.status = 'failed';
       }
 
+      const executionTime = Date.now() - startTime;
+
+      // Update session metadata with task failure
+      this.sessionManager.markTaskFailed(sessionId, executionTime);
+
       logger.error('Task execution with planning failed', {
         taskId,
+        sessionId,
         error: errorMessage,
-        executionTime: Date.now() - startTime,
+        executionTime,
       });
 
       const response: AgentResponse = {
+        sessionId,
         taskId,
         status: 'failed',
         error: errorMessage,
         steps,
-        executionTime: Date.now() - startTime,
+        executionTime: executionTime,
         plan: task.plan,
       };
 
@@ -462,8 +490,12 @@ Focus only on completing this step. Use the appropriate tools to accomplish the 
   async executeTaskStream(request: AgentRequest): Promise<AsyncIterable<any>> {
     const taskId = uuidv4();
 
+    // Use provided sessionId or create a new one
+    const sessionId = request.sessionId || this.context.sessionId;
+
     const task: AgentTask = {
       id: taskId,
+      sessionId,
       type: this.categorizeTask(request.task),
       description: request.task,
       status: 'running',
@@ -473,9 +505,13 @@ Focus only on completing this step. Use the appropriate tools to accomplish the 
 
     this.activeTasks.set(taskId, task);
 
+    // Update session metadata
+    this.sessionManager.addTaskToSession(sessionId, taskId);
+
     try {
       logger.info('Starting streaming task execution with planning', {
         taskId,
+        sessionId,
         type: task.type,
         description: request.task,
       });
@@ -578,6 +614,18 @@ At the end, if Git workflow was set up, make sure to commit your changes and the
   }
 
   private updateContext(partialContext: Partial<AgentContext>): void {
+    if (partialContext.sessionId && partialContext.sessionId !== this.context.sessionId) {
+      // Validate session exists
+      const session = this.sessionManager.getSession(partialContext.sessionId);
+      if (!session) {
+        logger.warn('Attempted to switch to non-existent session', { 
+          sessionId: partialContext.sessionId 
+        });
+        return;
+      }
+      this.context.sessionId = partialContext.sessionId;
+    }
+    
     if (partialContext.workingDirectory) {
       this.context.workingDirectory = partialContext.workingDirectory;
     }
@@ -725,6 +773,65 @@ At the end, if Git workflow was set up, make sure to commit your changes and the
 
   getTask(taskId: string): AgentTask | undefined {
     return this.activeTasks.get(taskId);
+  }
+
+  // Session management methods
+  getSessionId(): string {
+    return this.context.sessionId;
+  }
+
+  createNewSession(workingDirectory?: string): string {
+    const sessionId = this.sessionManager.createSession(workingDirectory);
+    this.context.sessionId = sessionId;
+    if (workingDirectory) {
+      this.context.workingDirectory = workingDirectory;
+      this.context.projectPath = workingDirectory;
+    }
+    
+    logger.info('Created new session', {
+      sessionId,
+      workingDirectory: this.context.workingDirectory
+    });
+    
+    return sessionId;
+  }
+
+  getSessionMetadata(sessionId?: string) {
+    const targetSessionId = sessionId || this.context.sessionId;
+    return this.sessionManager.getSession(targetSessionId);
+  }
+
+  getSessionStats(sessionId?: string) {
+    const targetSessionId = sessionId || this.context.sessionId;
+    return this.sessionManager.getSessionStats(targetSessionId);
+  }
+
+  async saveSessionMetadata(sessionId?: string): Promise<void> {
+    const targetSessionId = sessionId || this.context.sessionId;
+    await this.sessionManager.saveSessionMetadata(targetSessionId);
+  }
+
+  async loadSessionMetadata(sessionId: string) {
+    return await this.sessionManager.loadSessionMetadata(sessionId);
+  }
+
+  listAllSessions() {
+    return this.sessionManager.listSessions();
+  }
+
+  endCurrentSession(): void {
+    this.sessionManager.endSession(this.context.sessionId);
+    logger.info('Ended current session', { sessionId: this.context.sessionId });
+  }
+
+  setSessionId(sessionId: string): void {
+    const session = this.sessionManager.getSession(sessionId);
+    if (!session) {
+      throw new Error(`Session ${sessionId} not found`);
+    }
+    
+    this.context.sessionId = sessionId;
+    logger.info('Switched to existing session', { sessionId });
   }
 
   private async setupGitWorkflow(plan: AgentPlan): Promise<{ repoInfo: any; branchName: string }> {

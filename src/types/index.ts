@@ -1,5 +1,6 @@
 export interface AgentTask {
   id: string;
+  sessionId: string;
   type: 'code' | 'git' | 'file' | 'command';
   description: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
@@ -11,6 +12,7 @@ export interface AgentTask {
 }
 
 export interface AgentContext {
+  sessionId: string;
   workingDirectory: string;
   projectPath: string;
   files: FileInfo[];
@@ -51,6 +53,7 @@ export interface ToolResult {
 }
 
 export interface AgentRequest {
+  sessionId?: string;
   task: string;
   context?: Partial<AgentContext>;
   options?: {
@@ -61,6 +64,7 @@ export interface AgentRequest {
 }
 
 export interface AgentResponse {
+  sessionId: string;
   taskId: string;
   status: 'started' | 'completed' | 'failed';
   result?: any;
@@ -107,6 +111,7 @@ export interface PlanStep {
 
 export interface AgentPlan {
   id: string;
+  sessionId: string;
   task: string;
   steps: PlanStep[];
   summary: string;
@@ -120,4 +125,30 @@ export interface AgentPlan {
   prNumber?: number;
   createdAt: Date;
   status: 'pending' | 'executing' | 'completed' | 'failed';
+}
+
+// Session-related interfaces
+export interface SessionMetadata {
+  sessionId: string;
+  startTime: Date;
+  endTime?: Date;
+  tasks: string[]; // Task IDs
+  plans: string[]; // Plan IDs
+  workingDirectory: string;
+  projectPath: string;
+  totalTasks: number;
+  completedTasks: number;
+  failedTasks: number;
+  totalExecutionTime: number;
+  status: 'active' | 'completed' | 'failed';
+}
+
+export interface SessionManager {
+  createSession(workingDirectory?: string): string;
+  getSession(sessionId: string): SessionMetadata | undefined;
+  updateSession(sessionId: string, updates: Partial<SessionMetadata>): void;
+  endSession(sessionId: string): void;
+  saveSessionMetadata(sessionId: string): Promise<void>;
+  loadSessionMetadata(sessionId: string): Promise<SessionMetadata | null>;
+  listSessions(): SessionMetadata[];
 }

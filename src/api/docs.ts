@@ -3,8 +3,10 @@ import { z } from 'zod';
 
 // Validation schemas for documentation
 const executeTaskSchema = z.object({
+  sessionId: z.string().optional().describe('Session ID to associate with this task'),
   task: z.string().min(1).max(10000).describe('The task description for the agent to execute'),
   context: z.object({
+    sessionId: z.string().optional(),
     workingDirectory: z.string().optional(),
     projectPath: z.string().optional(),
     environment: z.record(z.string()).optional(),
@@ -14,6 +16,10 @@ const executeTaskSchema = z.object({
     allowDangerousCommands: z.boolean().optional(),
     workingDirectory: z.string().optional(),
   }).optional(),
+});
+
+const createSessionSchema = z.object({
+  workingDirectory: z.string().optional().describe('Working directory for the session'),
 });
 
 const analyzeProjectSchema = z.object({
@@ -26,12 +32,14 @@ export const docsHandler = (req: Request, res: Response) => {
     version: '1.0.0',
     description: 'An autonomous coding agent with planning capabilities that can execute tasks, manage files, perform git operations, and run commands.',
     features: [
+      'Session-based task management',
       'Task planning and execution',
       'File and directory operations',
       'Git repository management',
       'Command execution',
       'Project analysis',
-      'Streaming responses'
+      'Streaming responses',
+      'Metadata persistence'
     ],
     endpoints: {
       'GET /health': 'Health check endpoint',
@@ -41,12 +49,22 @@ export const docsHandler = (req: Request, res: Response) => {
       'POST /agent/analyze': 'Analyze a project structure and dependencies',
       'GET /agent/tasks': 'Get all active tasks',
       'GET /agent/tasks/:taskId': 'Get specific task details',
+      'POST /sessions': 'Create a new session',
+      'GET /sessions': 'List all sessions',
+      'GET /sessions/current': 'Get current session information',
+      'GET /sessions/:sessionId': 'Get specific session details',
+      'POST /sessions/:sessionId/switch': 'Switch to a different session',
+      'POST /sessions/:sessionId/end': 'End a session',
       'GET /docs': 'This API documentation',
     },
     schemas: {
       executeTask: {
         description: 'Schema for task execution requests',
         schema: executeTaskSchema.shape,
+      },
+      createSession: {
+        description: 'Schema for session creation requests',
+        schema: createSessionSchema.shape,
       },
       analyzeProject: {
         description: 'Schema for project analysis requests',
