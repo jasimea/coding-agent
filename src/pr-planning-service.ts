@@ -1,18 +1,5 @@
-import winston from "winston";
+import { prPlanningLogger as logger } from "./logger";
 import { PlanResult } from "./types";
-
-// Configure logger
-const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json(),
-  ),
-  transports: [
-    new winston.transports.File({ filename: "logs/pr-planning.log" }),
-    new winston.transports.Console(),
-  ],
-});
 
 export interface PRPlanningComment {
   body: string;

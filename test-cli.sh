@@ -80,9 +80,9 @@ if [[ $show_issue_help =~ ^[Yy]$ ]]; then
 fi
 
 echo "🔗 For detailed examples and usage, see:"
-echo "   - CLI_USAGE.md - Comprehensive CLI examples"
+echo "   - docs/CLI_USAGE.md - Comprehensive CLI examples"
 echo "   - README.md - Full documentation"
-echo "   - VPS_DEPLOYMENT.md - Production deployment guide"
+echo "   - docs/VPS_DEPLOYMENT.md - Production deployment guide"
 echo ""
 
 echo "✅ CLI test script completed!"

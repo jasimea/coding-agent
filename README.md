@@ -56,7 +56,7 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-See [VPS_DEPLOYMENT.md](VPS_DEPLOYMENT.md) for detailed deployment instructions.
+See [VPS_DEPLOYMENT.md](docs/VPS_DEPLOYMENT.md) for detailed deployment instructions.
 
 ## 🔧 Configuration
 
@@ -445,9 +445,11 @@ docker-compose logs -f coding-agent | grep DEBUG
 
 ## 📚 Documentation
 
-- [VPS Deployment Guide](VPS_DEPLOYMENT.md) - Complete VPS setup instructions
-- [Webhook Configuration](docs/webhook-setup.md) - JIRA/Trello webhook setup
-- [API Reference](docs/api-reference.md) - Complete API documentation
+📁 **[docs/](docs/)** - Complete documentation directory
+
+- **[CLI Usage Guide](docs/CLI_USAGE.md)** - Comprehensive CLI examples and local testing
+- **[VPS Deployment Guide](docs/VPS_DEPLOYMENT.md)** - Complete VPS setup instructions
+- **[Planning Workflow](docs/PLANNING_WORKFLOW.md)** - How the planning-first system works
 - [Architecture Overview](docs/architecture.md) - System design and components
 
 ## 🤝 Integration Examples
@@ -529,7 +531,7 @@ cp env.example .env  # Configure production settings
 - 🧠 **Claude AI**: Advanced planning and implementation using Claude
 - 📝 **Documentation**: Detailed planning comments and progress tracking
 
-See [CLI_USAGE.md](CLI_USAGE.md) for comprehensive CLI examples and [VPS_DEPLOYMENT.md](VPS_DEPLOYMENT.md) for production deployment.
+See [CLI_USAGE.md](docs/CLI_USAGE.md) for comprehensive CLI examples and [VPS_DEPLOYMENT.md](docs/VPS_DEPLOYMENT.md) for production deployment.
 
 ## 📄 License
 

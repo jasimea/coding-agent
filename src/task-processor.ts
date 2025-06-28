@@ -1,8 +1,8 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
-import winston from "winston";
 import simpleGit, { SimpleGit } from "simple-git";
+import { taskProcessorLogger as logger } from "./logger";
 import { AdvancedPlanningSystem } from "./advanced-planning";
 import { ClaudeConfigManager } from "./claude-config-manager";
 import { PRPlanningService } from "./pr-planning-service";
@@ -12,19 +12,6 @@ import {
   RepositoryConfig,
 } from "./webhook-types";
 import { TaskInfo, RepoContext, PlanResult } from "./types";
-
-// Configure logger
-const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json(),
-  ),
-  transports: [
-    new winston.transports.File({ filename: "logs/task-processor.log" }),
-    new winston.transports.Console(),
-  ],
-});
 
 export class TaskProcessor {
   private planningSystem: AdvancedPlanningSystem;

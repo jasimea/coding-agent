@@ -3,26 +3,13 @@ import cors from "cors";
 import helmet from "helmet";
 import { RateLimiterMemory } from "rate-limiter-flexible";
 import crypto from "crypto";
-import winston from "winston";
+import { webhookLogger as logger } from "./logger";
 import { TaskProcessor } from "./task-processor";
 import {
   WebhookPayload,
   JiraWebhookPayload,
   TrelloWebhookPayload,
 } from "./webhook-types";
-
-// Configure logger
-const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json(),
-  ),
-  transports: [
-    new winston.transports.File({ filename: "logs/webhook.log" }),
-    new winston.transports.Console(),
-  ],
-});
 
 export class WebhookServer {
   private app: express.Application;

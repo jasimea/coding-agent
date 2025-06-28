@@ -5,28 +5,10 @@ import dotenv from "dotenv";
 import chalk from "chalk";
 import { TaskProcessor } from "../task-processor.js";
 import { TaskProcessRequest } from "../webhook-types.js";
-import winston from "winston";
+import { cliLogger as logger } from "../logger.js";
 
 // Load environment variables
 dotenv.config();
-
-// Configure logger for CLI
-const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.printf(({ timestamp, level, message, ...meta }) => {
-      const metaStr = Object.keys(meta).length
-        ? JSON.stringify(meta, null, 2)
-        : "";
-      return `${chalk.gray(timestamp)} ${level}: ${message} ${metaStr}`;
-    }),
-  ),
-  transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({ filename: "logs/cli.log" }),
-  ],
-});
 
 class AutonomousCodingCLI {
   public taskProcessor: TaskProcessor;

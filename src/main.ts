@@ -2,28 +2,10 @@
 
 import dotenv from "dotenv";
 import { WebhookServer } from "./webhook-server";
-import winston from "winston";
+import { mainLogger as logger } from "./logger";
 
 // Load environment variables
 dotenv.config();
-
-// Configure logger
-const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json(),
-  ),
-  transports: [
-    new winston.transports.File({ filename: "logs/application.log" }),
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple(),
-      ),
-    }),
-  ],
-});
 
 async function main() {
   // Validate required environment variables

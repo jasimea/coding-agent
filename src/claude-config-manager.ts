@@ -1,19 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import winston from "winston";
-
-// Configure logger
-const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json(),
-  ),
-  transports: [
-    new winston.transports.File({ filename: "logs/claude-config.log" }),
-    new winston.transports.Console(),
-  ],
-});
+import { claudeConfigLogger as logger } from "./logger";
 
 export interface ClaudeProjectConfig {
   name: string;
