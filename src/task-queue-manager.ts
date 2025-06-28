@@ -28,6 +28,8 @@ export class TaskQueueManager {
   private readonly lockPrefix = "coding-agent:repo-lock:";
   private readonly lockTimeout = 3600000; // 1 hour in milliseconds
   private readonly maxRetries = 3;
+  private redisAvailable = false;
+  private inMemoryQueue: QueuedTask[] = []; // Fallback when Redis is unavailable
 
   constructor(taskStorage: TaskStorage, redisUrl?: string) {
     this.taskStorage = taskStorage;
@@ -38,14 +40,17 @@ export class TaskQueueManager {
 
     // Handle Redis connection events
     this.redis.on("connect", () => {
+      this.redisAvailable = true;
       logger.info("Redis connected successfully");
     });
 
     this.redis.on("error", (error) => {
+      this.redisAvailable = false;
       logger.error("Redis connection error", { error: error.message });
     });
 
     this.redis.on("close", () => {
+      this.redisAvailable = false;
       logger.warn("Redis connection closed");
     });
   }
@@ -56,12 +61,26 @@ export class TaskQueueManager {
   async initialize(): Promise<void> {
     try {
       await this.redis.connect();
+      this.redisAvailable = true;
       await this.taskStorage.initialize();
       await this.cleanupExpiredLocks();
-      logger.info("Task queue manager initialized");
+      logger.info("Task queue manager initialized with Redis");
     } catch (error) {
-      logger.error("Failed to initialize task queue manager", { error });
-      throw error;
+      logger.error("Failed to initialize Redis", { 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
+      
+      // Initialize storage even if Redis fails
+      try {
+        await this.taskStorage.initialize();
+        this.redisAvailable = false;
+        logger.warn("Task queue manager initialized without Redis (using in-memory fallback)");
+      } catch (storageError) {
+        logger.error("Failed to initialize task storage", { 
+          error: storageError instanceof Error ? storageError.message : "Unknown storage error" 
+        });
+        throw storageError;
+      }
     }
   }
 
@@ -89,11 +108,18 @@ export class TaskQueueManager {
       };
       await this.taskStorage.saveTask(taskId, taskStatus);
 
-      // Add to Redis queue with priority
-      const score = Date.now() + (1000 - priority); // Higher priority = lower score
-      await this.redis.zadd(this.queueKey, score, JSON.stringify(queuedTask));
+      if (this.redisAvailable) {
+        // Add to Redis queue with priority
+        const score = Date.now() + (1000 - priority); // Higher priority = lower score
+        await this.redis.zadd(this.queueKey, score, JSON.stringify(queuedTask));
+        logger.info("Task enqueued to Redis", { taskId, repositoryUrl: request.repositoryUrl, priority });
+      } else {
+        // Fallback to in-memory queue
+        this.inMemoryQueue.push(queuedTask);
+        this.inMemoryQueue.sort((a, b) => b.priority - a.priority); // Sort by priority descending
+        logger.info("Task enqueued to in-memory queue", { taskId, repositoryUrl: request.repositoryUrl, priority });
+      }
 
-      logger.info("Task enqueued", { taskId, repositoryUrl: request.repositoryUrl, priority });
       return taskId;
     } catch (error) {
       logger.error("Failed to enqueue task", { error });
@@ -106,18 +132,35 @@ export class TaskQueueManager {
    */
   async dequeueTask(): Promise<QueuedTask | null> {
     try {
-      const taskData = await this.redis.zpopmin(this.queueKey, 1);
-      if (!taskData || taskData.length === 0 || !taskData[1]) {
-        return null;
+      let queuedTask: QueuedTask | null = null;
+
+      if (this.redisAvailable) {
+        const taskData = await this.redis.zpopmin(this.queueKey, 1);
+        if (!taskData || taskData.length === 0 || !taskData[1]) {
+          return null;
+        }
+        queuedTask = JSON.parse(taskData[1]);
+      } else {
+        // Use in-memory queue
+        if (this.inMemoryQueue.length === 0) {
+          return null;
+        }
+        queuedTask = this.inMemoryQueue.shift()!;
       }
 
-      const queuedTask: QueuedTask = JSON.parse(taskData[1]);
+      if (!queuedTask) {
+        return null;
+      }
       
       // Check if repository is locked
       const isLocked = await this.isRepositoryLocked(queuedTask.repositoryUrl);
       if (isLocked) {
         // Re-queue the task for later processing
-        await this.redis.zadd(this.queueKey, Date.now() + 5000, JSON.stringify(queuedTask));
+        if (this.redisAvailable) {
+          await this.redis.zadd(this.queueKey, Date.now() + 5000, JSON.stringify(queuedTask));
+        } else {
+          this.inMemoryQueue.push(queuedTask);
+        }
         logger.debug("Repository locked, re-queuing task", { 
           taskId: queuedTask.taskId, 
           repositoryUrl: queuedTask.repositoryUrl 
@@ -238,10 +281,14 @@ export class TaskQueueManager {
    */
   async getQueueSize(): Promise<number> {
     try {
-      return await this.redis.zcard(this.queueKey);
+      if (this.redisAvailable) {
+        return await this.redis.zcard(this.queueKey);
+      } else {
+        return this.inMemoryQueue.length;
+      }
     } catch (error) {
       logger.error("Failed to get queue size", { error });
-      return 0;
+      return this.inMemoryQueue.length; // Fallback to in-memory count
     }
   }
 
@@ -250,11 +297,15 @@ export class TaskQueueManager {
    */
   async getQueuedTasks(limit: number = 10): Promise<QueuedTask[]> {
     try {
-      const tasks = await this.redis.zrange(this.queueKey, 0, limit - 1);
-      return tasks.map(task => JSON.parse(task));
+      if (this.redisAvailable) {
+        const tasks = await this.redis.zrange(this.queueKey, 0, limit - 1);
+        return tasks.map(task => JSON.parse(task));
+      } else {
+        return this.inMemoryQueue.slice(0, limit);
+      }
     } catch (error) {
       logger.error("Failed to get queued tasks", { error });
-      return [];
+      return this.inMemoryQueue.slice(0, limit); // Fallback to in-memory tasks
     }
   }
 

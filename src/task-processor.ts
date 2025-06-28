@@ -44,6 +44,7 @@ export class TaskProcessor {
     this.repositoryManager = new SharedRepositoryManager(this.workspaceDir);
 
     this.initializeDirectories();
+    this.setupGracefulShutdown();
   }
 
   private async initializeDirectories(): Promise<void> {
@@ -155,7 +156,10 @@ export class TaskProcessor {
       await this.processTaskAsync(queuedTask.taskId, queuedTask.request);
 
     } catch (error) {
-      logger.error("Error processing next task", { error });
+      logger.error("Error processing next task", { 
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined
+      });
     } finally {
       this.isProcessing = false;
     }
@@ -908,9 +912,45 @@ This repository has been configured with:
    * Clean up resources
    */
   async cleanup(): Promise<void> {
+    logger.info("Starting task processor cleanup...");
+    
     this.stopTaskProcessing();
-    await this.queueManager.close();
-    await this.repositoryManager.cleanupOldRepositories();
-    logger.info("Task processor cleanup completed");
+    
+    try {
+      await this.queueManager.close();
+      await this.repositoryManager.cleanupOldRepositories();
+      logger.info("Task processor cleanup completed");
+    } catch (error) {
+      logger.error("Error during cleanup", { error });
+    }
+  }
+
+  /**
+   * Setup graceful shutdown handlers
+   */
+  private setupGracefulShutdown(): void {
+    const signals = ['SIGTERM', 'SIGINT', 'SIGUSR2'];
+    
+    signals.forEach(signal => {
+      process.on(signal, async () => {
+        logger.info(`Received ${signal}, starting graceful shutdown...`);
+        await this.cleanup();
+        process.exit(0);
+      });
+    });
+
+    // Handle uncaught exceptions
+    process.on('uncaughtException', async (error) => {
+      logger.error('Uncaught exception', { error });
+      await this.cleanup();
+      process.exit(1);
+    });
+
+    // Handle unhandled promise rejections
+    process.on('unhandledRejection', async (reason) => {
+      logger.error('Unhandled promise rejection', { reason });
+      await this.cleanup();
+      process.exit(1);
+    });
   }
 }
