@@ -61,7 +61,9 @@ GITHUB_TOKEN=your_github_personal_access_token
 
 ## 🏃‍♂️ Usage
 
-### Starting the API Server
+For detailed usage instructions, see our [**📖 Complete Usage Guide**](USAGE_GUIDE.md) which covers both API and CLI usage with examples.
+
+### Quick Start - API Server
 
 ```bash
 # Development mode with hot reload
@@ -84,12 +86,14 @@ pnpm cli
 Example CLI interactions:
 ```
 Agent> Create a new React component called Button
-Agent> Add all files to git and commit with message 'Initial commit'
+Agent> Add all files to git and commit with message 'Initial commit'  
 Agent> List all files in the src directory
 Agent> Run npm install
 Agent> analyze
 Agent> help
 ```
+
+**📖 For comprehensive usage instructions, examples, and troubleshooting, see the [Complete Usage Guide](USAGE_GUIDE.md)**
 
 ### API Endpoints
 
