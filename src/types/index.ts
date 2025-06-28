@@ -1,154 +1,41 @@
-export interface AgentTask {
-  id: string;
-  sessionId: string;
-  type: 'code' | 'git' | 'file' | 'command';
-  description: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  createdAt: Date;
-  updatedAt: Date;
-  result?: any;
-  error?: string;
-  plan?: AgentPlan;
-}
+// types/index.ts
+// Define interfaces for the advanced planning system
 
-export interface AgentContext {
-  sessionId: string;
-  workingDirectory: string;
-  projectPath: string;
-  files: FileInfo[];
-  gitStatus?: GitStatus;
-  environment: Record<string, string>;
-}
-
-export interface FileInfo {
-  path: string;
-  name: string;
-  extension: string;
-  size: number;
-  lastModified: Date;
-  content?: string;
-}
-
-export interface GitStatus {
-  branch: string;
-  staged: string[];
-  modified: string[];
-  untracked: string[];
-  ahead: number;
-  behind: number;
-}
-
-export interface CommandResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-  executionTime: number;
-}
-
-export interface ToolResult {
-  success: boolean;
-  data?: any;
-  error?: string;
-  executionTime: number;
-}
-
-export interface AgentRequest {
-  sessionId?: string;
-  task: string;
-  context?: Partial<AgentContext>;
-  options?: {
-    maxExecutionTime?: number;
-    allowDangerousCommands?: boolean;
-    workingDirectory?: string;
-  };
-}
-
-export interface AgentResponse {
-  sessionId: string;
+export interface TaskInfo {
   taskId: string;
-  status: 'started' | 'completed' | 'failed';
-  result?: any;
-  error?: string;
-  steps: AgentStep[];
-  executionTime: number;
-  plan?: AgentPlan;
-}
-
-export interface AgentStep {
-  tool: string;
-  action: string;
-  input: any;
-  output: any;
-  timestamp: Date;
-  duration: number;
-  planStepId?: string;
-}
-
-import { z } from 'zod';
-
-export interface AITool {
+  title: string;
   description: string;
-  parameters: z.ZodSchema;
-  execute(parameters: any): Promise<any>;
+  priority: string;
+  labels?: string[];
+  acceptanceCriteria?: string;
 }
 
-export interface AIProviderConfig {
-  provider: 'openai' | 'anthropic' | 'google';
-  apiKey: string;
-  model?: string;
-  maxTokens?: number;
-  temperature?: number;
+export interface RepoContext {
+  name: string;
+  branch: string;
+  fileStructure: any;
+  packageJson: any;
+  readme: string;
 }
 
-// Planning-related interfaces
-export interface PlanStep {
-  id: string;
-  description: string;
-  action: 'git_setup' | 'file_operation' | 'git_operation' | 'github_operation' | 'command_execution' | 'analysis';
-  complexity: 'low' | 'medium' | 'high';
-  estimatedDuration: string;
+export interface RepoAnalysis {
+  analysis: string;
+  timestamp: string;
 }
 
-export interface AgentPlan {
-  id: string;
-  sessionId: string;
-  task: string;
-  steps: PlanStep[];
+export interface PlanComponents {
+  taskInfo: TaskInfo;
+  repoAnalysis: RepoAnalysis;
+  initialPlan: string;
+  technicalPlan: string;
+  testingStrategy: string;
+  riskAssessment: string;
+}
+
+export interface PlanResult {
+  fullPlan: string;
   summary: string;
-  estimatedTotalTime: string;
-  dependencies: string[];
-  branchName?: string;
-  commitMessage?: string;
-  prTitle?: string;
-  prDescription?: string;
-  prUrl?: string;
-  prNumber?: number;
-  createdAt: Date;
-  status: 'pending' | 'executing' | 'completed' | 'failed';
-}
-
-// Session-related interfaces
-export interface SessionMetadata {
-  sessionId: string;
-  startTime: Date;
-  endTime?: Date;
-  tasks: string[]; // Task IDs
-  plans: string[]; // Plan IDs
-  workingDirectory: string;
-  projectPath: string;
-  totalTasks: number;
-  completedTasks: number;
-  failedTasks: number;
-  totalExecutionTime: number;
-  status: 'active' | 'completed' | 'failed';
-}
-
-export interface SessionManager {
-  createSession(workingDirectory?: string): string;
-  getSession(sessionId: string): SessionMetadata | undefined;
-  updateSession(sessionId: string, updates: Partial<SessionMetadata>): void;
-  endSession(sessionId: string): void;
-  saveSessionMetadata(sessionId: string): Promise<void>;
-  loadSessionMetadata(sessionId: string): Promise<SessionMetadata | null>;
-  listSessions(): SessionMetadata[];
+  complexity: string;
+  estimatedHours: number;
+  components: PlanComponents;
 }

@@ -1,168 +1,120 @@
-import express, { Request, Response, NextFunction } from 'express';
+// src/server.ts
+import express, { Express } from 'express';
 import cors from 'cors';
-import helmet from 'helmet';
-import { RateLimiterMemory } from 'rate-limiter-flexible';
-import { Config } from './config/index.js';
-import { createContextLogger } from './utils/logger.js';
-import { healthHandler } from './api/health.js';
-import { agentInfoHandler } from './api/agent-info.js';
-import { executeTaskHandler } from './api/execute-task.js';
-import { executeTaskStreamHandler } from './api/execute-task-stream.js';
-import { analyzeProjectHandler } from './api/analyze-project.js';
-import { getTasksHandler } from './api/get-tasks.js';
-import { getTaskHandler } from './api/get-task.js';
-import { docsHandler } from './api/docs.js';
-import { 
-  createSessionHandler,
-  getSessionHandler,
-  listSessionsHandler,
-  endSessionHandler,
-  getCurrentSessionHandler,
-  switchSessionHandler
-} from './api/sessions.js';
+import dotenv from 'dotenv';
+import { TaskManager } from './task-manager';
+import { RepoContext } from './types';
 
-const logger = createContextLogger('Server');
+// Load environment variables
+dotenv.config();
 
-export class Server {
-  private app: express.Application;
-  private rateLimiter: RateLimiterMemory;
+const app: Express = express();
+const port = process.env.PORT || 3000;
 
-  constructor() {
-    this.app = express();
-    this.rateLimiter = new RateLimiterMemory({
-      points: Config.security.rateLimitMaxRequests,
-      duration: Config.security.rateLimitWindowMs / 1000,
-    });
+// Initialize TaskManager with API key from environment variables
+const taskManager = new TaskManager(process.env.ANTHROPIC_API_KEY || '');
 
-    this.setupMiddleware();
-    this.setupRoutes();
-    this.setupErrorHandling();
+// Middleware
+app.use(cors());
+app.use(express.json());
 
-    logger.info('Server initialized');
+// Task CRUD endpoints
+app.post('/api/tasks', (req, res) => {
+  try {
+    const taskData = req.body;
+    const task = taskManager.createTask(taskData);
+    res.status(201).json(task);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(400).json({ error: errorMessage });
   }
+});
 
-  private setupMiddleware(): void {
-    // Security middleware
-    this.app.use(helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'"],
-          scriptSrc: ["'self'"],
-          imgSrc: ["'self'", "data:", "https:"],
-        },
-      },
-    }));
+app.get('/api/tasks', (req, res) => {
+  const tasks = taskManager.getAllTasks();
+  res.json(tasks);
+});
 
-    // CORS
-    this.app.use(cors({
-      origin: Config.isDevelopment ? true : process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
-      credentials: true,
-    }));
-
-    // Body parsing
-    this.app.use(express.json({ limit: '10mb' }));
-    this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-    // Rate limiting middleware
-    this.app.use(async (req: Request, res: Response, next: NextFunction) => {
-      try {
-        await this.rateLimiter.consume(req.ip || 'anonymous');
-        next();
-      } catch (rateLimiterRes: any) {
-        const remainingPoints = rateLimiterRes?.remainingPoints || 0;
-        const msBeforeNext = rateLimiterRes?.msBeforeNext || 0;
-
-        res.set({
-          'Retry-After': Math.round(msBeforeNext / 1000) || 1,
-          'X-RateLimit-Limit': Config.security.rateLimitMaxRequests,
-          'X-RateLimit-Remaining': remainingPoints,
-          'X-RateLimit-Reset': new Date(Date.now() + msBeforeNext).toISOString(),
-        });
-
-        res.status(429).json({
-          error: 'Too Many Requests',
-          message: 'Rate limit exceeded. Please try again later.',
-        });
-      }
-    });
-
-    // Request logging
-    this.app.use((req: Request, res: Response, next: NextFunction) => {
-      logger.info('Request', {
-        method: req.method,
-        path: req.path,
-        ip: req.ip,
-        userAgent: req.get('User-Agent'),
-      });
-      next();
-    });
+app.get('/api/tasks/:id', (req, res) => {
+  const task = taskManager.getTask(req.params.id);
+  
+  if (!task) {
+    res.status(404).json({ error: 'Task not found' });
+    return;
   }
+  
+  res.json(task);
+});
 
-  private setupRoutes(): void {
-    // Health check
-    this.app.get('/health', healthHandler);
-
-    // Agent endpoints
-    this.app.get('/agent/info', agentInfoHandler);
-    this.app.post('/agent/execute', executeTaskHandler);
-    this.app.post('/agent/execute/stream', executeTaskStreamHandler);
-    this.app.post('/agent/analyze', analyzeProjectHandler);
-    this.app.get('/agent/tasks', getTasksHandler);
-    this.app.get('/agent/tasks/:taskId', getTaskHandler);
-
-    // Session management endpoints
-    this.app.post('/sessions', createSessionHandler);
-    this.app.get('/sessions', listSessionsHandler);
-    this.app.get('/sessions/current', getCurrentSessionHandler);
-    this.app.get('/sessions/:sessionId', getSessionHandler);
-    this.app.post('/sessions/:sessionId/switch', switchSessionHandler);
-    this.app.post('/sessions/:sessionId/end', endSessionHandler);
-
-    // Documentation
-    this.app.get('/docs', docsHandler);
+app.put('/api/tasks/:id', (req, res) => {
+  const updatedTask = taskManager.updateTask(req.params.id, req.body);
+  
+  if (!updatedTask) {
+    res.status(404).json({ error: 'Task not found' });
+    return;
   }
+  
+  res.json(updatedTask);
+});
 
-  private setupErrorHandling(): void {
-    // 404 handler
-    this.app.use('*', (req: Request, res: Response) => {
-      res.status(404).json({
-        error: 'Not Found',
-        message: `Route ${req.method} ${req.path} not found`,
-      });
-    });
-
-    // Global error handler
-    this.app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
-      logger.error('Unhandled error', {
-        error: error.message,
-        stack: error.stack,
-        method: req.method,
-        path: req.path,
-      });
-
-      res.status(500).json({
-        error: 'Internal Server Error',
-        message: Config.isDevelopment ? error.message : 'Something went wrong',
-      });
-    });
+app.delete('/api/tasks/:id', (req, res) => {
+  const deleted = taskManager.deleteTask(req.params.id);
+  
+  if (!deleted) {
+    res.status(404).json({ error: 'Task not found' });
+    return;
   }
+  
+  res.status(204).end();
+});
 
-  public start(port: number = Config.server.port): void {
-    this.app.listen(port, () => {
-      logger.info('Server started', {
-        port,
-        environment: Config.server.nodeEnv,
-        isDevelopment: Config.isDevelopment,
-      });
-      
-      console.log(`🚀 Coding Agent Server running on port ${port}`);
-      console.log(`📚 API Documentation: http://localhost:${port}/docs`);
-      console.log(`🔧 Health Check: http://localhost:${port}/health`);
-    });
+// Planning related endpoints
+app.post('/api/tasks/:id/plan', async (req, res) => {
+  try {
+    const taskId = req.params.id;
+    const repoContext: RepoContext = req.body;
+    
+    const planResult = await taskManager.generatePlanForTask(taskId, repoContext);
+    
+    if (!planResult) {
+      res.status(404).json({ error: 'Task not found' });
+      return;
+    }
+    
+    res.json(planResult);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
+});
 
-  public getApp(): express.Application {
-    return this.app;
+// Filtering endpoints
+app.get('/api/tasks/status/:status', (req, res) => {
+  const validStatuses = ['Todo', 'InProgress', 'Done'];
+  const status = req.params.status;
+  
+  if (!validStatuses.includes(status)) {
+    res.status(400).json({ error: 'Invalid status parameter' });
+    return;
   }
-}
+  
+  const tasks = taskManager.getTasksByStatus(status as 'Todo' | 'InProgress' | 'Done');
+  res.json(tasks);
+});
+
+app.get('/api/tasks/assignee/:assignee', (req, res) => {
+  const tasks = taskManager.getTasksByAssignee(req.params.assignee);
+  res.json(tasks);
+});
+
+app.get('/api/tasks/label/:label', (req, res) => {
+  const tasks = taskManager.getTasksByLabel(req.params.label);
+  res.json(tasks);
+});
+
+// Start server
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}`);
+});
+
+export default app;
